@@ -26,6 +26,20 @@ public class HavadaCizimTest {
     }
 
     @Test
+    public void uzunCizimdeEskiCizgilerSilinir() {
+        HavadaCizim c = new HavadaCizim();
+        long t = 0;
+        for (int cizgi = 0; cizgi < 10; cizgi++) {
+            for (int i = 0; i < 500; i++) c.guncelle((i % 100) / 100f, cizgi / 10f + (i / 100) * 0.01f, true, false, t++);
+            c.guncelle(0, 0, false, false, t++);
+        }
+        int toplam = 0;
+        for (float[][] cizgi : c.cizgiler()) toplam += cizgi.length;
+        org.junit.Assert.assertTrue("toplam=" + toplam, toplam <= HavadaCizim.EN_COK_NOKTA);
+        org.junit.Assert.assertTrue(c.cizgiler().size() < 10);
+    }
+
+    @Test
     public void yumrukTutulunca() {
         HavadaCizim c = new HavadaCizim();
         c.guncelle(0.1f, 0.1f, true, false, 0);

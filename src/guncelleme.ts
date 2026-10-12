@@ -52,14 +52,30 @@ export function surumBilgisiDogrula(v: unknown): SurumBilgisi | null {
 
 type Getir = (adres: string, secenek?: RequestInit) => Promise<Response>;
 
+/**
+ * surum.json önce GitHub API'den okunur (önbellek 1 dk); API saatlik sınıra takılırsa ya da
+ * ulaşılamazsa raw.githubusercontent.com'a düşülür (önbellek 5 dk).
+ */
+const API = 'https://api.github.com/repos/TIGO124/detector/contents/surum.json?ref=main';
+
+async function surumJsonu(getir: Getir, signal: AbortSignal): Promise<unknown> {
+  try {
+    const cevap = await getir(API, { cache: 'no-store', signal, headers: { Accept: 'application/vnd.github.raw+json' } });
+    if (cevap.ok) return await cevap.json();
+  } catch (hata) {
+    if (signal.aborted) throw hata;
+  }
+  const cevap = await getir(`${DEPO}main/surum.json`, { cache: 'no-store', signal });
+  if (!cevap.ok) throw new Error(`Sunucu ${cevap.status} döndürdü`);
+  return cevap.json();
+}
+
 /** Depoda yüklü olandan yeni bir sürüm varsa bilgisini, yoksa null döndürür. */
 export async function yeniSurumuBul(getir: Getir = (a, s) => fetch(a, s)): Promise<SurumBilgisi | null> {
   const kontrol = new AbortController();
   const zaman = setTimeout(() => kontrol.abort(), 15_000);
   try {
-    const cevap = await getir(`${DEPO}main/surum.json`, { cache: 'no-store', signal: kontrol.signal });
-    if (!cevap.ok) throw new Error(`Sunucu ${cevap.status} döndürdü`);
-    const bilgi = surumBilgisiDogrula(await cevap.json());
+    const bilgi = surumBilgisiDogrula(await surumJsonu(getir, kontrol.signal));
     if (!bilgi) throw new Error('Sürüm bilgisi okunamadı');
     return surumKarsilastir(bilgi.surum, UYGULAMA_SURUMU) > 0 ? bilgi : null;
   } finally {

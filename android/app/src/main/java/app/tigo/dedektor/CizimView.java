@@ -57,6 +57,22 @@ public class CizimView extends View {
     private final RectF kutu = new RectF();
     private final Path yol = new Path();
     private final YuzEfektleri efektler = new YuzEfektleri();
+    /** Efektler için yüz noktalarının ekran konumu; her karede yeni nesne üretilmesin diye tek örnek. */
+    private final EkranNoktalari yuzNoktalari = new EkranNoktalari();
+
+    private final class EkranNoktalari implements YuzEfektleri.Noktalar {
+        List<NormalizedLandmark> liste;
+
+        @Override
+        public float x(int i) {
+            return CizimView.this.x(liste.get(i).x());
+        }
+
+        @Override
+        public float y(int i) {
+            return CizimView.this.y(liste.get(i).y());
+        }
+    }
     private final float dp;
 
     private Ayarlar ayarlar;
@@ -208,10 +224,8 @@ public class CizimView extends View {
         if (f != null) {
             for (List<NormalizedLandmark> n : f.faceLandmarks()) {
                 if (mod == Ayarlar.Mod.EFEKT) {
-                    efektler.ciz(tuval, new YuzEfektleri.Noktalar() {
-                        @Override public float x(int i) { return CizimView.this.x(n.get(i).x()); }
-                        @Override public float y(int i) { return CizimView.this.y(n.get(i).y()); }
-                    }, ayarlar.efekt, ayarlar.renk);
+                    yuzNoktalari.liste = n;
+                    efektler.ciz(tuval, yuzNoktalari, ayarlar.efekt, ayarlar.renk);
                     continue;
                 }
                 if (ayarlar.yuzAgi) cizgileriCiz(tuval, n, AG, agKalemi);

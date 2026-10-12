@@ -39,6 +39,20 @@ describe('yeniSurumuBul', () => {
     await expect(yeniSurumuBul(json({ surum: UYGULAMA_SURUMU }))).resolves.toBeNull();
   });
 
+  it('GitHub API sınıra takılırsa raw adresine düşer', async () => {
+    const sonraki = UYGULAMA_SURUMU.replace(/\d+$/, (s) => String(Number(s) + 1));
+    const adresler: string[] = [];
+    const getir = async (adres: string) => {
+      adresler.push(adres);
+      return adres.includes('api.github.com')
+        ? new Response('{"message":"API rate limit exceeded"}', { status: 403 })
+        : new Response(JSON.stringify({ surum: sonraki }), { status: 200 });
+    };
+    await expect(yeniSurumuBul(getir)).resolves.toEqual({ surum: sonraki, notlar: [] });
+    expect(adresler).toHaveLength(2);
+    expect(adresler[1]).toContain('raw.githubusercontent.com');
+  });
+
   it('sunucu hatasında hata fırlatır', async () => {
     await expect(yeniSurumuBul(json({}, 404))).rejects.toThrow('404');
   });

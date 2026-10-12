@@ -84,6 +84,7 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
     private boolean onKamera = true;
     private volatile int sonYuzSayisi;
     private volatile int sonElSayisi;
+    private volatile long sonDurumYazimi;
     private volatile List<ElTakibi.ElDurumu> sonEller = Collections.emptyList();
     private Bitmap kaydedilecek;
 
@@ -162,10 +163,12 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
 
     @Override
     protected void onDestroy() {
-        super.onDestroy();
+        // Önce kamerayı ayır: kapanan iş parçacığına yeni kare gelip reddedilmesin.
+        if (saglayici != null) saglayici.unbindAll();
         oyun.durdur();
         analiz.execute(algilayici::hepsiniKapat);
         analiz.shutdown();
+        super.onDestroy();
     }
 
     /** Durum çubuğu ve gezinme çubuğu içeriğin üstüne binmesin. */
@@ -345,7 +348,12 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
         else ifadeler = ifadeAnalizi.guncelle(puanlar.get(0));
         cizim.yuzGuncelle(sonuc, ifadeler, genislik, yukseklik);
         sonYuzSayisi = sonuc.faceLandmarks().size();
-        runOnUiThread(this::durumuYaz);
+        // Sayaçlar saniyede 4 kez yeterli; her karede yazmak üst çubuğu her karede yeniden ölçtürür.
+        long simdi = SystemClock.uptimeMillis();
+        if (simdi - sonDurumYazimi >= 250) {
+            sonDurumYazimi = simdi;
+            runOnUiThread(this::durumuYaz);
+        }
     }
 
     @Override

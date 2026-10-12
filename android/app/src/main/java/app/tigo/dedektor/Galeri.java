@@ -32,6 +32,10 @@ final class Galeri {
         if (uri == null) throw new IllegalStateException("Galeriye yazılamadı");
         try (OutputStream cikis = cr.openOutputStream(uri)) {
             if (cikis == null || !foto.compress(Bitmap.CompressFormat.JPEG, 92, cikis)) throw new IllegalStateException("JPEG yazılamadı");
+        } catch (Exception e) {
+            // Yarım kalan kayıt galeride boş dosya olarak kalmasın.
+            cr.delete(uri, null, null);
+            throw e;
         }
         if (Build.VERSION.SDK_INT >= 29) {
             d.clear();

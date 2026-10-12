@@ -1,45 +1,75 @@
 package app.tigo.dedektor;
 
+import com.google.mediapipe.tasks.components.containers.Landmark;
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark;
 import java.util.List;
 
-/** El noktalarından (MediaPipe: 21 nokta) parmak sayısı, işaret hali ve Türkçe adlar. */
+/**
+ * El noktalarından (MediaPipe: 21 nokta) açık parmaklar ve Türkçe adlar. Hesap 3B yapılır:
+ * MediaPipe'ın "dünya" noktaları (metre) kullanılınca kameraya doğru uzanan parmak da kısa
+ * görünmez; parmak ekleminden bükülme açısına bakılır.
+ */
 final class ElAnalizi {
 
     static final int BILEK = 0;
     static final int ISARET_UCU = 8;
-    private static final int BASPARMAK_EKLEM = 3;
+    /** Dört parmak için {kök, orta eklem, uç eklem, uç}. */
+    private static final int[][] PARMAKLAR = {{5, 6, 7, 8}, {9, 10, 11, 12}, {13, 14, 15, 16}, {17, 18, 19, 20}};
+    private static final int BASPARMAK_KOK = 1;
+    private static final int BASPARMAK_EKLEM = 2;
+    private static final int BASPARMAK_UC_EKLEM = 3;
     private static final int BASPARMAK_UCU = 4;
     private static final int SERCE_KOKU = 17;
-    /** Dört parmak için {orta eklem, uç}. */
-    private static final int[][] PARMAKLAR = {{6, 8}, {10, 12}, {14, 16}, {18, 20}};
+
+    /**
+     * Toplam bükülme (kök + orta + uç eklem) bundan azsa parmak açıktır. Ölçülen: rahat açık
+     * parmak 27–103°, avuca kıvrık parmak 163–241°; sınır ikisinin ortasında.
+     */
+    static final float PARMAK_BUKULME_SINIRI = 130f;
+    /** Başparmak bundan az bükülmüşse ve ucu serçe kökünden eklemden daha uzaksa açıktır. */
+    static final float BASPARMAK_BUKULME_SINIRI = 75f;
 
     private ElAnalizi() {}
 
-    /**
-     * Açık parmaklar: [başparmak, işaret, orta, yüzük, serçe]. Elin yönünden bağımsızdır:
-     * parmak ucu bileğe orta eklemden daha uzaksa parmak açıktır. Başparmak için serçe
-     * parmak kökü kullanılır: açık başparmağın ucu oradan eklemden daha uzaktadır.
-     */
-    static boolean[] acikParmaklar(List<NormalizedLandmark> n) {
+    static float[][] noktalar(List<NormalizedLandmark> n) {
+        float[][] p = new float[n.size()][];
+        for (int i = 0; i < n.size(); i++) p[i] = new float[] {n.get(i).x(), n.get(i).y(), n.get(i).z()};
+        return p;
+    }
+
+    static float[][] dunyaNoktalari(List<Landmark> n) {
+        float[][] p = new float[n.size()][];
+        for (int i = 0; i < n.size(); i++) p[i] = new float[] {n.get(i).x(), n.get(i).y(), n.get(i).z()};
+        return p;
+    }
+
+    /** Açık parmaklar: [başparmak, işaret, orta, yüzük, serçe]. */
+    static boolean[] acikParmaklar(float[][] p) {
         boolean[] acik = new boolean[5];
-        acik[0] = uzaklik(n.get(BASPARMAK_UCU), n.get(SERCE_KOKU)) > uzaklik(n.get(BASPARMAK_EKLEM), n.get(SERCE_KOKU));
+        float basparmakBukulme = aci(fark(p[BASPARMAK_EKLEM], p[BASPARMAK_KOK]), fark(p[BASPARMAK_UC_EKLEM], p[BASPARMAK_EKLEM]))
+            + aci(fark(p[BASPARMAK_UC_EKLEM], p[BASPARMAK_EKLEM]), fark(p[BASPARMAK_UCU], p[BASPARMAK_UC_EKLEM]));
+        // Kıvrık başparmağın ucu avucun içine, serçe parmağa doğru gelir.
+        acik[0] = uzaklik(p[BASPARMAK_UCU], p[SERCE_KOKU]) > uzaklik(p[BASPARMAK_UC_EKLEM], p[SERCE_KOKU]) * 1.05f
+            && basparmakBukulme < BASPARMAK_BUKULME_SINIRI;
         for (int i = 0; i < PARMAKLAR.length; i++) {
-            acik[i + 1] = uzaklik(n.get(BILEK), n.get(PARMAKLAR[i][1])) > uzaklik(n.get(BILEK), n.get(PARMAKLAR[i][0]));
+            int[] f = PARMAKLAR[i];
+            float bukulme = aci(fark(p[f[0]], p[BILEK]), fark(p[f[1]], p[f[0]]))
+                + aci(fark(p[f[1]], p[f[0]]), fark(p[f[2]], p[f[1]]))
+                + aci(fark(p[f[2]], p[f[1]]), fark(p[f[3]], p[f[2]]));
+            acik[i + 1] = bukulme < PARMAK_BUKULME_SINIRI;
         }
         return acik;
     }
 
-    static int parmakSayisi(List<NormalizedLandmark> n) {
+    static int parmakSayisi(boolean[] acik) {
         int sayi = 0;
-        for (boolean a : acikParmaklar(n)) if (a) sayi++;
+        for (boolean a : acik) if (a) sayi++;
         return sayi;
     }
 
     /** Yalnızca işaret parmağı açık (başparmak serbest): havada çizim için kalem aşağıda. */
-    static boolean isaretEdiyor(List<NormalizedLandmark> n) {
-        boolean[] a = acikParmaklar(n);
-        return a[1] && !a[2] && !a[3] && !a[4];
+    static boolean isaretEdiyor(boolean[] acik) {
+        return acik[1] && !acik[2] && !acik[3] && !acik[4];
     }
 
     /** MediaPipe el hareketi adını Türkçeye çevirir; tanınmayan hareket için null. */
@@ -64,9 +94,21 @@ final class ElAnalizi {
         return "El";
     }
 
-    private static float uzaklik(NormalizedLandmark a, NormalizedLandmark b) {
-        float dx = a.x() - b.x();
-        float dy = a.y() - b.y();
-        return (float) Math.sqrt(dx * dx + dy * dy);
+    private static float[] fark(float[] a, float[] b) {
+        return new float[] {a[0] - b[0], a[1] - b[1], a[2] - b[2]};
+    }
+
+    private static float uzaklik(float[] a, float[] b) {
+        float[] d = fark(a, b);
+        return (float) Math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+    }
+
+    /** İki vektör arasındaki açı (derece). */
+    private static float aci(float[] u, float[] v) {
+        double nu = Math.sqrt(u[0] * u[0] + u[1] * u[1] + u[2] * u[2]);
+        double nv = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+        if (nu == 0 || nv == 0) return 0f;
+        double cos = (u[0] * v[0] + u[1] * v[1] + u[2] * v[2]) / (nu * nv);
+        return (float) Math.toDegrees(Math.acos(Math.max(-1, Math.min(1, cos))));
     }
 }

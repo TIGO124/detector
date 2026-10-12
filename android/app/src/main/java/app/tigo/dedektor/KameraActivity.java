@@ -35,11 +35,13 @@ import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.mediapipe.framework.image.MPImage;
+import com.google.mediapipe.tasks.components.containers.Category;
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark;
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult;
 import com.google.mediapipe.tasks.vision.gesturerecognizer.GestureRecognizerResult;
 import com.google.mediapipe.tasks.vision.imagesegmenter.ImageSegmenterResult;
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -75,12 +77,14 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
     private OyunAkisi oyun;
     private final ArkaPlan arkaPlanIsleyici = new ArkaPlan();
     private final HavadaCizim havadaCizim = new HavadaCizim();
+    private final ElTakibi elTakibi = new ElTakibi();
+    private final IfadeAnalizi ifadeAnalizi = new IfadeAnalizi();
     private final ExecutorService analiz = Executors.newSingleThreadExecutor();
     private ProcessCameraProvider saglayici;
     private boolean onKamera = true;
     private volatile int sonYuzSayisi;
     private volatile int sonElSayisi;
-    private volatile GestureRecognizerResult sonEl;
+    private volatile List<ElTakibi.ElDurumu> sonEller = Collections.emptyList();
     private Bitmap kaydedilecek;
 
     private final ActivityResultLauncher<String> kameraIzni = registerForActivityResult(
@@ -335,17 +339,22 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
 
     @Override
     public void yuz(FaceLandmarkerResult sonuc, int genislik, int yukseklik) {
-        cizim.yuzGuncelle(sonuc, genislik, yukseklik);
+        List<List<Category>> puanlar = sonuc.faceBlendshapes().orElse(Collections.emptyList());
+        List<String> ifadeler = Collections.emptyList();
+        if (puanlar.isEmpty()) ifadeAnalizi.sifirla();
+        else ifadeler = ifadeAnalizi.guncelle(puanlar.get(0));
+        cizim.yuzGuncelle(sonuc, ifadeler, genislik, yukseklik);
         sonYuzSayisi = sonuc.faceLandmarks().size();
         runOnUiThread(this::durumuYaz);
     }
 
     @Override
     public void el(GestureRecognizerResult sonuc, int genislik, int yukseklik) {
-        cizim.elGuncelle(sonuc, genislik, yukseklik);
-        sonEl = sonuc;
-        sonElSayisi = sonuc.landmarks().size();
-        if (ayarlar.mod == Ayarlar.Mod.CIZIM) cizimiGuncelle(sonuc);
+        List<ElTakibi.ElDurumu> eller = elTakibi.guncelle(ElTakibi.olcumler(sonuc));
+        cizim.elGuncelle(eller, genislik, yukseklik);
+        sonEller = eller;
+        sonElSayisi = eller.size();
+        if (ayarlar.mod == Ayarlar.Mod.CIZIM) cizimiGuncelle(eller);
     }
 
     @Override
@@ -366,25 +375,21 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
         runOnUiThread(() -> toast(mesaj));
     }
 
-    /** İlk elin işaret parmağı ucu çizer; yumruk tutulursa çizim silinir. */
-    private void cizimiGuncelle(GestureRecognizerResult sonuc) {
-        if (sonuc.landmarks().isEmpty()) {
+    /** İlk elin işaret parmağı ucu çizer; yumruk tutulursa çizim silinir. Durumlar sabitlenmiştir. */
+    private void cizimiGuncelle(List<ElTakibi.ElDurumu> eller) {
+        if (eller.isEmpty()) {
             havadaCizim.elYok();
             return;
         }
-        List<NormalizedLandmark> n = sonuc.landmarks().get(0);
-        boolean yumruk = "Closed_Fist".equals(CizimView.ilkKategori(sonuc.gestures(), 0)) || ElAnalizi.parmakSayisi(n) == 0;
-        NormalizedLandmark uc = n.get(ElAnalizi.ISARET_UCU);
-        havadaCizim.guncelle(uc.x(), uc.y(), !yumruk && ElAnalizi.isaretEdiyor(n), yumruk, SystemClock.uptimeMillis());
+        ElTakibi.ElDurumu el = eller.get(0);
+        NormalizedLandmark uc = el.noktalar.get(ElAnalizi.ISARET_UCU);
+        havadaCizim.guncelle(uc.x(), uc.y(), el.isaret && !el.yumruk(), el.yumruk(), SystemClock.uptimeMillis());
     }
 
     /** Oyun için: görünen ellerden ilk geçerli seçim. */
     private TasKagitMakas.Secim oyuncuSecimi() {
-        GestureRecognizerResult s = sonEl;
-        if (s == null) return null;
-        for (int i = 0; i < s.landmarks().size(); i++) {
-            TasKagitMakas.Secim secim = TasKagitMakas.hareketten(
-                CizimView.ilkKategori(s.gestures(), i), ElAnalizi.parmakSayisi(s.landmarks().get(i)));
+        for (ElTakibi.ElDurumu el : sonEller) {
+            TasKagitMakas.Secim secim = TasKagitMakas.hareketten(el.hareketKodu, el.parmak);
             if (secim != null) return secim;
         }
         return null;

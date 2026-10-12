@@ -28,6 +28,18 @@ final class TasKagitMakas {
         return null;
     }
 
+    /** Birkaç okumanın en sık olanı; okuma yoksa null. Eşitlikte ilk görülen kazanır. */
+    static Secim cogunluk(java.util.List<Secim> okumalar) {
+        int[] sayac = new int[Secim.values().length];
+        Secim secilen = null;
+        for (Secim s : okumalar) {
+            if (s == null) continue;
+            sayac[s.ordinal()]++;
+            if (secilen == null || sayac[s.ordinal()] > sayac[secilen.ordinal()]) secilen = s;
+        }
+        return secilen;
+    }
+
     /** 1: oyuncu kazandı, 0: berabere, -1: telefon kazandı. */
     static int sonuc(Secim oyuncu, Secim telefon) {
         if (oyuncu == telefon) return 0;

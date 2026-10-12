@@ -4,6 +4,8 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
 import android.widget.TextView;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 /** Taş-kağıt-makas turu: geri sayım, oyuncunun el hareketini okuma, sonuç ve skor. */
@@ -19,6 +21,7 @@ final class OyunAkisi {
 
     private final Handler isleyici = new Handler(Looper.getMainLooper());
     private final Random rastgele = new Random();
+    private final List<TasKagitMakas.Secim> okumalar = new ArrayList<>();
     private final TextView yazi;
     private final ElOkuyucu okuyucu;
     private TextView skor;
@@ -44,8 +47,12 @@ final class OyunAkisi {
             String s = SAYIM[i];
             isleyici.postDelayed(() -> goster(s), i * ADIM_MS);
         }
-        // "Göster!" dedikten sonra el hareketinin oturması için kısa bekleme.
-        isleyici.postDelayed(this::bitir, SAYIM.length * ADIM_MS + 400);
+        // "Göster!" dedikten sonra el dört kez okunur, çoğunluk karar verir: el hareketi
+        // oturana kadarki ara kareler ya da tek bir yanlış okuma sonucu bozmaz.
+        okumalar.clear();
+        long goster = (SAYIM.length - 1) * ADIM_MS;
+        for (long ms = 250; ms <= 700; ms += 150) isleyici.postDelayed(() -> okumalar.add(okuyucu.secim()), goster + ms);
+        isleyici.postDelayed(this::bitir, goster + 750);
     }
 
     void durdur() {
@@ -56,7 +63,7 @@ final class OyunAkisi {
 
     private void bitir() {
         oynaniyor = false;
-        TasKagitMakas.Secim oyuncu = okuyucu.secim();
+        TasKagitMakas.Secim oyuncu = TasKagitMakas.cogunluk(okumalar);
         if (oyuncu == null) {
             goster("El görülmedi\nTekrar dene");
             return;

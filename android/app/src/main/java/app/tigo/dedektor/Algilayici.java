@@ -118,6 +118,9 @@ final class Algilayici {
                 .setBaseOptions(temel("pose_landmarker_lite.task", hizlandirici))
                 .setRunningMode(RunningMode.LIVE_STREAM)
                 .setNumPoses(1)
+                .setMinPoseDetectionConfidence(0.6f)
+                .setMinPosePresenceConfidence(0.6f)
+                .setMinTrackingConfidence(0.6f)
                 .setResultListener((sonuc, girdi) -> {
                     dinleyici.vucut(sonuc, girdi.getWidth(), girdi.getHeight());
                     vucut.bitti();
@@ -197,8 +200,8 @@ final class Algilayici {
             .setRunningMode(RunningMode.LIVE_STREAM)
             .setNumFaces(1)
             .setMinFaceDetectionConfidence(0.6f)
-            .setMinFacePresenceConfidence(0.5f)
-            .setMinTrackingConfidence(0.5f)
+            .setMinFacePresenceConfidence(0.6f)
+            .setMinTrackingConfidence(0.6f)
             // Gülümseme, göz kırpma gibi ifadeler için.
             .setOutputFaceBlendshapes(true)
             .setResultListener((sonuc, girdi) -> {
@@ -216,9 +219,10 @@ final class Algilayici {
             .setBaseOptions(temel("gesture_recognizer.task", hizlandirici))
             .setRunningMode(RunningMode.LIVE_STREAM)
             .setNumHands(2)
-            .setMinHandDetectionConfidence(0.5f)
-            .setMinHandPresenceConfidence(0.5f)
-            .setMinTrackingConfidence(0.5f)
+            // Yanlış el algılamasını azaltmak için varsayılandan (0.5) sıkı.
+            .setMinHandDetectionConfidence(0.6f)
+            .setMinHandPresenceConfidence(0.6f)
+            .setMinTrackingConfidence(0.6f)
             .setResultListener((sonuc, girdi) -> {
                 dinleyici.el(sonuc, girdi.getWidth(), girdi.getHeight());
                 el.bitti();

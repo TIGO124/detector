@@ -19,6 +19,13 @@ public class TasKagitMakasTest {
     }
 
     @Test
+    public void cogunluk() {
+        assertEquals(Secim.MAKAS, TasKagitMakas.cogunluk(java.util.Arrays.asList(Secim.KAGIT, Secim.MAKAS, null, Secim.MAKAS)));
+        assertEquals(Secim.TAS, TasKagitMakas.cogunluk(java.util.Arrays.asList(null, Secim.TAS)));
+        assertNull(TasKagitMakas.cogunluk(java.util.Arrays.asList(null, null)));
+    }
+
+    @Test
     public void hareketVeParmak() {
         assertEquals(Secim.TAS, TasKagitMakas.hareketten("Closed_Fist", 3));
         assertEquals(Secim.KAGIT, TasKagitMakas.hareketten("Open_Palm", 0));

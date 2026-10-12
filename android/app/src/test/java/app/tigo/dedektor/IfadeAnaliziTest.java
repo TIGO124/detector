@@ -19,28 +19,59 @@ public class IfadeAnaliziTest {
         return l;
     }
 
+    /** Aynı ölçümü birkaç kare verir, son sonucu döndürür. */
+    private static List<String> tekrarla(IfadeAnalizi a, int kare, List<Category> olcum) {
+        List<String> sonuc = null;
+        for (int i = 0; i < kare; i++) sonuc = a.guncelle(olcum);
+        return sonuc;
+    }
+
     @Test
     public void notrYuzIfadesiz() {
-        assertTrue(IfadeAnalizi.ifadeler(puanlar("mouthSmileLeft", 0.1f, "jawOpen", 0.05f)).isEmpty());
+        assertTrue(tekrarla(new IfadeAnalizi(), 5, puanlar("mouthSmileLeft", 0.1f, "jawOpen", 0.05f)).isEmpty());
+    }
+
+    @Test
+    public void tekKarelikSicramaSayilmaz() {
+        IfadeAnalizi a = new IfadeAnalizi();
+        assertTrue(a.guncelle(puanlar("mouthSmileLeft", 0.9f, "mouthSmileRight", 0.9f)).isEmpty());
+        assertTrue(a.guncelle(puanlar("mouthSmileLeft", 0.1f, "mouthSmileRight", 0.1f)).isEmpty());
     }
 
     @Test
     public void gulumsemeVeAgiz() {
-        List<String> s = IfadeAnalizi.ifadeler(puanlar("mouthSmileLeft", 0.8f, "mouthSmileRight", 0.7f, "jawOpen", 0.5f));
+        List<String> s = tekrarla(new IfadeAnalizi(), 5, puanlar("mouthSmileLeft", 0.8f, "mouthSmileRight", 0.7f, "jawOpen", 0.6f));
         assertEquals(Arrays.asList("Gülümsüyor", "Ağız açık"), s);
     }
 
     @Test
+    public void sinirdakiIfadeYanipSonmez() {
+        IfadeAnalizi a = new IfadeAnalizi();
+        tekrarla(a, 5, puanlar("mouthSmileLeft", 0.8f, "mouthSmileRight", 0.8f));
+        // Açılma eşiğinin (0.5) altına düştü ama kapanma eşiğinin (0.35) üstünde: sürer.
+        assertEquals(Arrays.asList("Gülümsüyor"), tekrarla(a, 10, puanlar("mouthSmileLeft", 0.42f, "mouthSmileRight", 0.42f)));
+        assertTrue(tekrarla(a, 10, puanlar("mouthSmileLeft", 0.1f, "mouthSmileRight", 0.1f)).isEmpty());
+    }
+
+    @Test
     public void gozler() {
-        assertEquals(Arrays.asList("Gözler kapalı"), IfadeAnalizi.ifadeler(puanlar("eyeBlinkLeft", 0.9f, "eyeBlinkRight", 0.8f)));
-        assertEquals(Arrays.asList("Göz kırpıyor"), IfadeAnalizi.ifadeler(puanlar("eyeBlinkLeft", 0.9f, "eyeBlinkRight", 0.1f)));
+        assertEquals(Arrays.asList("Gözler kapalı"), tekrarla(new IfadeAnalizi(), 5, puanlar("eyeBlinkLeft", 0.9f, "eyeBlinkRight", 0.8f)));
+        assertEquals(Arrays.asList("Göz kırpıyor"), tekrarla(new IfadeAnalizi(), 5, puanlar("eyeBlinkLeft", 0.9f, "eyeBlinkRight", 0.1f)));
         // Kısık gözler kırpma sayılmaz.
-        assertTrue(IfadeAnalizi.ifadeler(puanlar("eyeBlinkLeft", 0.55f, "eyeBlinkRight", 0.45f)).isEmpty());
+        assertTrue(tekrarla(new IfadeAnalizi(), 5, puanlar("eyeBlinkLeft", 0.45f, "eyeBlinkRight", 0.35f)).isEmpty());
     }
 
     @Test
     public void kaslar() {
-        assertEquals(Arrays.asList("Kaşlar kalkık"), IfadeAnalizi.ifadeler(puanlar("browInnerUp", 0.7f)));
-        assertEquals(Arrays.asList("Kaşlar çatık"), IfadeAnalizi.ifadeler(puanlar("browDownLeft", 0.6f, "browDownRight", 0.6f)));
+        assertEquals(Arrays.asList("Kaşlar kalkık"), tekrarla(new IfadeAnalizi(), 5, puanlar("browInnerUp", 0.7f)));
+        assertEquals(Arrays.asList("Kaşlar çatık"), tekrarla(new IfadeAnalizi(), 5, puanlar("browDownLeft", 0.6f, "browDownRight", 0.6f)));
+    }
+
+    @Test
+    public void sifirlaninca() {
+        IfadeAnalizi a = new IfadeAnalizi();
+        tekrarla(a, 5, puanlar("jawOpen", 0.8f));
+        a.sifirla();
+        assertTrue(a.guncelle(puanlar("jawOpen", 0.1f)).isEmpty());
     }
 }

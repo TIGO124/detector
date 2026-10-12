@@ -9,17 +9,16 @@ import android.graphics.RectF;
 import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.view.View;
-import com.google.mediapipe.tasks.components.containers.Category;
 import com.google.mediapipe.tasks.components.containers.Connection;
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark;
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarker;
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult;
-import com.google.mediapipe.tasks.vision.gesturerecognizer.GestureRecognizerResult;
 import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarker;
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker;
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -63,7 +62,8 @@ public class CizimView extends View {
     private Ayarlar ayarlar;
     private HavadaCizim havadaCizim;
     private volatile FaceLandmarkerResult yuz;
-    private volatile GestureRecognizerResult el;
+    private volatile List<ElTakibi.ElDurumu> eller = Collections.emptyList();
+    private volatile List<String> ifadeler = Collections.emptyList();
     private volatile PoseLandmarkerResult vucut;
     private volatile Bitmap arkaPlan;
     private volatile int resimGenisligi = 1;
@@ -125,7 +125,8 @@ public class CizimView extends View {
 
     void temizle() {
         yuz = null;
-        el = null;
+        eller = Collections.emptyList();
+        ifadeler = Collections.emptyList();
         vucut = null;
         arkaPlan = null;
         postInvalidate();
@@ -136,15 +137,17 @@ public class CizimView extends View {
         resimYuksekligi = yukseklik;
     }
 
-    void yuzGuncelle(FaceLandmarkerResult s, int g, int y) {
+    void yuzGuncelle(FaceLandmarkerResult s, List<String> ifadeler, int g, int y) {
         boyut(g, y);
         yuz = s;
+        this.ifadeler = ifadeler;
         postInvalidate();
     }
 
-    void elGuncelle(GestureRecognizerResult s, int g, int y) {
+    /** Eller, karelere göre sabitlenmiş etiketleriyle (ElTakibi). */
+    void elGuncelle(List<ElTakibi.ElDurumu> eller, int g, int y) {
         boyut(g, y);
-        el = s;
+        this.eller = eller;
         postInvalidate();
     }
 
@@ -218,10 +221,9 @@ public class CizimView extends View {
 
         if (mod == Ayarlar.Mod.CIZIM && havadaCizim != null) havadaCizimiCiz(tuval);
 
-        GestureRecognizerResult e = el;
-        if (e != null) elleriCiz(tuval, e);
+        elleriCiz(tuval, eller);
 
-        if (f != null && ayarlar.etiketler && !f.faceLandmarks().isEmpty()) ifadeyiYaz(tuval, f);
+        if (f != null && ayarlar.etiketler && !f.faceLandmarks().isEmpty()) ifadeyiYaz(tuval, f, ifadeler);
     }
 
     private void renkleriAyarla(int renk) {
@@ -258,10 +260,9 @@ public class CizimView extends View {
         }
     }
 
-    private void elleriCiz(Canvas tuval, GestureRecognizerResult e) {
-        List<List<NormalizedLandmark>> eller = e.landmarks();
-        for (int i = 0; i < eller.size(); i++) {
-            List<NormalizedLandmark> n = eller.get(i);
+    private void elleriCiz(Canvas tuval, List<ElTakibi.ElDurumu> eller) {
+        for (ElTakibi.ElDurumu el : eller) {
+            List<NormalizedLandmark> n = el.noktalar;
             cizgileriCiz(tuval, n, EL, elKalemi);
             NormalizedLandmark enUst = n.get(0);
             for (NormalizedLandmark nokta : n) {
@@ -269,25 +270,15 @@ public class CizimView extends View {
                 if (nokta.y() < enUst.y()) enUst = nokta;
             }
             if (!ayarlar.etiketler) continue;
-            StringBuilder metin = new StringBuilder(ElAnalizi.elEtiketi(ilkKategori(e.handedness(), i)));
-            String hareket = ElAnalizi.hareketAdi(ilkKategori(e.gestures(), i));
+            StringBuilder metin = new StringBuilder(el.taraf);
+            String hareket = ElAnalizi.hareketAdi(el.hareketKodu);
             if (hareket != null) metin.append(" · ").append(hareket);
-            metin.append(" · ").append(ElAnalizi.parmakSayisi(n));
+            metin.append(" · ").append(el.parmak);
             etiketCiz(tuval, metin.toString(), x(enUst.x()), y(enUst.y()) - 10f * dp, true);
         }
     }
 
-    /** Listenin i. elemanının en olası kategorisi (yoksa null). */
-    static String ilkKategori(List<List<Category>> liste, int i) {
-        if (i >= liste.size() || liste.get(i).isEmpty()) return null;
-        Category c = liste.get(i).get(0);
-        return c.score() >= 0.5f ? c.categoryName() : null;
-    }
-
-    private void ifadeyiYaz(Canvas tuval, FaceLandmarkerResult f) {
-        List<List<Category>> puanlar = f.faceBlendshapes().orElse(null);
-        if (puanlar == null || puanlar.isEmpty()) return;
-        List<String> ifadeler = IfadeAnalizi.ifadeler(puanlar.get(0));
+    private void ifadeyiYaz(Canvas tuval, FaceLandmarkerResult f, List<String> ifadeler) {
         if (ifadeler.isEmpty()) return;
         NormalizedLandmark cene = f.faceLandmarks().get(0).get(CENE);
         etiketCiz(tuval, TextUtils.join(" · ", ifadeler), x(cene.x()), y(cene.y()) + 12f * dp, false);

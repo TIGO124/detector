@@ -5,9 +5,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-import com.google.mediapipe.tasks.components.containers.NormalizedLandmark;
-import java.util.ArrayList;
-import java.util.List;
 import org.junit.Test;
 
 public class ElAnaliziTest {
@@ -36,10 +33,15 @@ public class ElAnaliziTest {
         el[4] = new float[] {0.52f, 0.72f};
     }
 
-    private static List<NormalizedLandmark> noktalar(float[][] el) {
-        List<NormalizedLandmark> n = new ArrayList<>();
-        for (float[] p : el) n.add(NormalizedLandmark.create(p[0], p[1], 0f));
-        return n;
+    /** Düzlemsel el (z = 0) için açık parmaklar. */
+    private static boolean[] acik(float[][] el) {
+        float[][] p = new float[el.length][];
+        for (int i = 0; i < el.length; i++) p[i] = new float[] {el[i][0], el[i][1], 0f};
+        return ElAnalizi.acikParmaklar(p);
+    }
+
+    private static int sayi(float[][] el) {
+        return ElAnalizi.parmakSayisi(acik(el));
     }
 
     /** Eli bilek çevresinde 90 derece döndürür. */
@@ -55,8 +57,8 @@ public class ElAnaliziTest {
 
     @Test
     public void acikElBesParmak() {
-        assertEquals(5, ElAnalizi.parmakSayisi(noktalar(acikEl())));
-        assertFalse(ElAnalizi.isaretEdiyor(noktalar(acikEl())));
+        assertEquals(5, sayi(acikEl()));
+        assertFalse(ElAnalizi.isaretEdiyor(acik(acikEl())));
     }
 
     @Test
@@ -67,7 +69,7 @@ public class ElAnaliziTest {
         kivir(el, 9, 10, 12);
         kivir(el, 13, 14, 16);
         kivir(el, 17, 18, 20);
-        assertEquals(0, ElAnalizi.parmakSayisi(noktalar(el)));
+        assertEquals(0, sayi(el));
     }
 
     @Test
@@ -76,20 +78,32 @@ public class ElAnaliziTest {
         basparmagiKivir(el);
         kivir(el, 13, 14, 16);
         kivir(el, 17, 18, 20);
-        assertEquals(2, ElAnalizi.parmakSayisi(noktalar(el)));
-        assertFalse(ElAnalizi.isaretEdiyor(noktalar(el)));
+        assertEquals(2, sayi(el));
+        assertFalse(ElAnalizi.isaretEdiyor(acik(el)));
 
         kivir(el, 9, 10, 12);
-        assertEquals(1, ElAnalizi.parmakSayisi(noktalar(el)));
-        assertTrue(ElAnalizi.isaretEdiyor(noktalar(el)));
+        assertEquals(1, sayi(el));
+        assertTrue(ElAnalizi.isaretEdiyor(acik(el)));
     }
 
     @Test
     public void yonDegisinceSayiDegismez() {
         float[][] el = acikEl();
         kivir(el, 17, 18, 20);
-        assertEquals(4, ElAnalizi.parmakSayisi(noktalar(el)));
-        assertEquals(4, ElAnalizi.parmakSayisi(noktalar(dondur(el))));
+        assertEquals(4, sayi(el));
+        assertEquals(4, sayi(dondur(el)));
+    }
+
+    @Test
+    public void kameraDogruUzananParmakAcikSayilir() {
+        // İşaret parmağı kameraya doğru uzanıyor: 2B'de kısa görünür, 3B'de düz.
+        float[][] el = acikEl();
+        float[][] p = new float[el.length][];
+        for (int i = 0; i < el.length; i++) p[i] = new float[] {el[i][0], el[i][1], 0f};
+        p[6] = new float[] {0.44f, 0.63f, -0.08f};
+        p[7] = new float[] {0.44f, 0.62f, -0.13f};
+        p[8] = new float[] {0.44f, 0.61f, -0.18f};
+        assertTrue(ElAnalizi.acikParmaklar(p)[1]);
     }
 
     @Test

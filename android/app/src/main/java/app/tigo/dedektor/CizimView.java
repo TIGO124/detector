@@ -1,9 +1,12 @@
 package app.tigo.dedektor;
 
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.RectF;
+import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.view.View;
 import com.google.mediapipe.tasks.components.containers.Category;
@@ -11,21 +14,21 @@ import com.google.mediapipe.tasks.components.containers.Connection;
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark;
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarker;
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult;
+import com.google.mediapipe.tasks.vision.gesturerecognizer.GestureRecognizerResult;
 import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarker;
-import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarkerResult;
+import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker;
+import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
 /**
- * Kamera önizlemesinin üstüne yüz ağını ve elleri yeşil çizgilerle çizer. Önizleme gibi
- * "fillCenter" ölçeklenir; ön kamerada önizleme aynalı olduğu için çizim de aynalanır.
+ * Kamera önizlemesinin üstüne çizer: arka plan katmanı, vücut iskeleti, yüz ağı ya da yüz
+ * efektleri, havada çizim, eller ve etiketler. Önizleme gibi "fillCenter" ölçeklenir; ön
+ * kamerada önizleme aynalı olduğu için çizim de aynalanır.
  */
 public class CizimView extends View {
 
-    private static final int YESIL = 0xFF00E676;
-    private static final int YESIL_SOLUK = 0x5900E676;
-    private static final int YESIL_ACIK = 0xFFB9F6CA;
     private static final int KOYU = 0xFF0B1120;
 
     private static final int[] AG = diziyeCevir(FaceLandmarker.FACE_LANDMARKS_TESSELATION);
@@ -40,24 +43,36 @@ public class CizimView extends View {
         FaceLandmarker.FACE_LANDMARKS_RIGHT_IRIS
     );
     private static final int[] EL = diziyeCevir(HandLandmarker.HAND_CONNECTIONS);
+    /** Vücut iskeleti; yüz noktaları (0–10) yüz ağıyla çakışmasın diye atlanır. */
+    private static final int[] VUCUT = vucutBaglantilari();
+    private static final int CENE = 152;
 
-    private final Paint agKalemi = kalem(YESIL_SOLUK);
-    private final Paint hatKalemi = kalem(YESIL);
-    private final Paint elKalemi = kalem(YESIL);
+    private final Paint agKalemi = kalem();
+    private final Paint hatKalemi = kalem();
+    private final Paint elKalemi = kalem();
+    private final Paint cizimKalemi = kalem();
     private final Paint eklemKalemi = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint etiketZemini = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint etiketYazisi = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final RectF etiketKutusu = new RectF();
+    private final Paint filtre = new Paint(Paint.FILTER_BITMAP_FLAG);
+    private final RectF kutu = new RectF();
+    private final Path yol = new Path();
+    private final YuzEfektleri efektler = new YuzEfektleri();
     private final float dp;
 
+    private Ayarlar ayarlar;
+    private HavadaCizim havadaCizim;
     private volatile FaceLandmarkerResult yuz;
-    private volatile HandLandmarkerResult el;
+    private volatile GestureRecognizerResult el;
+    private volatile PoseLandmarkerResult vucut;
+    private volatile Bitmap arkaPlan;
     private volatile int resimGenisligi = 1;
     private volatile int resimYuksekligi = 1;
     private volatile boolean aynali = true;
 
     private float olcek, kaymaX, kaymaY;
     private float[] cizgiler = new float[0];
+    private int sonRenk;
 
     public CizimView(Context context, AttributeSet attrs) {
         super(context, attrs);
@@ -65,16 +80,20 @@ public class CizimView extends View {
         agKalemi.setStrokeWidth(Math.max(1f, 0.6f * dp));
         hatKalemi.setStrokeWidth(1.5f * dp);
         elKalemi.setStrokeWidth(3f * dp);
-        eklemKalemi.setColor(YESIL_ACIK);
-        etiketZemini.setColor(YESIL);
+        cizimKalemi.setStrokeWidth(6f * dp);
+        cizimKalemi.setStrokeJoin(Paint.Join.ROUND);
         etiketYazisi.setColor(KOYU);
         etiketYazisi.setTextSize(15f * dp);
         etiketYazisi.setFakeBoldText(true);
     }
 
-    private static Paint kalem(int renk) {
+    void baglan(Ayarlar ayarlar, HavadaCizim havadaCizim) {
+        this.ayarlar = ayarlar;
+        this.havadaCizim = havadaCizim;
+    }
+
+    private static Paint kalem() {
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-        p.setColor(renk);
         p.setStyle(Paint.Style.STROKE);
         p.setStrokeCap(Paint.Cap.ROUND);
         return p;
@@ -93,79 +112,185 @@ public class CizimView extends View {
         return dizi;
     }
 
-    public void setAynali(boolean aynali) {
+    private static int[] vucutBaglantilari() {
+        List<Connection> secili = new ArrayList<>();
+        for (Connection b : PoseLandmarker.POSE_LANDMARKS) if (b.start() > 10 && b.end() > 10) secili.add(b);
+        return diziyeCevir(secili);
+    }
+
+    void setAynali(boolean aynali) {
         this.aynali = aynali;
         temizle();
     }
 
-    public void temizle() {
+    void temizle() {
         yuz = null;
         el = null;
+        vucut = null;
+        arkaPlan = null;
         postInvalidate();
     }
 
-    public void yuzGuncelle(FaceLandmarkerResult sonuc, int genislik, int yukseklik) {
+    private void boyut(int genislik, int yukseklik) {
         resimGenisligi = genislik;
         resimYuksekligi = yukseklik;
-        yuz = sonuc;
+    }
+
+    void yuzGuncelle(FaceLandmarkerResult s, int g, int y) {
+        boyut(g, y);
+        yuz = s;
         postInvalidate();
     }
 
-    public void elGuncelle(HandLandmarkerResult sonuc, int genislik, int yukseklik) {
-        resimGenisligi = genislik;
-        resimYuksekligi = yukseklik;
-        el = sonuc;
+    void elGuncelle(GestureRecognizerResult s, int g, int y) {
+        boyut(g, y);
+        el = s;
         postInvalidate();
     }
 
-    /** MediaPipe etiketi kişinin gerçek elini gösterir (modele aynalanmamış kare verilir). */
-    static String elEtiketi(String kategori) {
-        if ("Right".equals(kategori)) return "Sağ el";
-        if ("Left".equals(kategori)) return "Sol el";
-        return "El";
+    void vucutGuncelle(PoseLandmarkerResult s, int g, int y) {
+        boyut(g, y);
+        vucut = s;
+        postInvalidate();
     }
 
-    private float x(NormalizedLandmark n) {
-        float ekranX = n.x() * resimGenisligi * olcek + kaymaX;
+    void arkaPlanGuncelle(Bitmap katman) {
+        arkaPlan = katman;
+        postInvalidate();
+    }
+
+    void vucutuTemizle() {
+        vucut = null;
+        postInvalidate();
+    }
+
+    void arkaPlaniTemizle() {
+        arkaPlan = null;
+        postInvalidate();
+    }
+
+    /** Normalize x koordinatının (0–1) ekrandaki konumu. */
+    float x(float nx) {
+        float ekranX = nx * resimGenisligi * olcek + kaymaX;
         return aynali ? getWidth() - ekranX : ekranX;
     }
 
-    private float y(NormalizedLandmark n) {
-        return n.y() * resimYuksekligi * olcek + kaymaY;
+    float y(float ny) {
+        return ny * resimYuksekligi * olcek + kaymaY;
     }
 
     @Override
     protected void onDraw(Canvas tuval) {
         super.onDraw(tuval);
+        if (ayarlar == null) return;
         // Önizleme ile aynı "fillCenter" ölçeği: kısa kenar ekranı doldurur, taşan kısım kırpılır.
         olcek = Math.max(getWidth() / (float) resimGenisligi, getHeight() / (float) resimYuksekligi);
         kaymaX = (getWidth() - resimGenisligi * olcek) / 2f;
         kaymaY = (getHeight() - resimYuksekligi * olcek) / 2f;
+        renkleriAyarla(ayarlar.renk);
+        Ayarlar.Mod mod = ayarlar.mod;
 
-        FaceLandmarkerResult y = yuz;
-        if (y != null) {
-            for (List<NormalizedLandmark> noktalar : y.faceLandmarks()) {
-                cizgileriCiz(tuval, noktalar, AG, agKalemi);
-                cizgileriCiz(tuval, noktalar, YUZ_HATLARI, hatKalemi);
+        Bitmap katman = arkaPlan;
+        if (katman != null && ayarlar.arkaPlan != Ayarlar.ArkaPlan.KAPALI) arkaPlaniCiz(tuval, katman);
+
+        PoseLandmarkerResult v = vucut;
+        if (v != null && ayarlar.vucut) {
+            for (List<NormalizedLandmark> n : v.landmarks()) {
+                cizgileriCiz(tuval, n, VUCUT, elKalemi);
+                for (int i = 11; i < n.size(); i++) tuval.drawCircle(x(n.get(i).x()), y(n.get(i).y()), 4f * dp, eklemKalemi);
             }
         }
 
-        HandLandmarkerResult e = el;
-        if (e != null) {
-            List<List<NormalizedLandmark>> eller = e.landmarks();
-            for (int i = 0; i < eller.size(); i++) {
-                List<NormalizedLandmark> noktalar = eller.get(i);
-                cizgileriCiz(tuval, noktalar, EL, elKalemi);
-                NormalizedLandmark enUst = noktalar.get(0);
-                for (NormalizedLandmark n : noktalar) {
-                    tuval.drawCircle(x(n), y(n), 3.5f * dp, eklemKalemi);
-                    if (n.y() < enUst.y()) enUst = n;
+        FaceLandmarkerResult f = yuz;
+        if (f != null) {
+            for (List<NormalizedLandmark> n : f.faceLandmarks()) {
+                if (mod == Ayarlar.Mod.EFEKT) {
+                    efektler.ciz(tuval, new YuzEfektleri.Noktalar() {
+                        @Override public float x(int i) { return CizimView.this.x(n.get(i).x()); }
+                        @Override public float y(int i) { return CizimView.this.y(n.get(i).y()); }
+                    }, ayarlar.efekt, ayarlar.renk);
+                    continue;
                 }
-                List<Category> tur = i < e.handedness().size() ? e.handedness().get(i) : null;
-                String ad = elEtiketi(tur == null || tur.isEmpty() ? null : tur.get(0).categoryName());
-                etiketCiz(tuval, ad, x(enUst), y(enUst) - 10f * dp);
+                if (ayarlar.yuzAgi) cizgileriCiz(tuval, n, AG, agKalemi);
+                cizgileriCiz(tuval, n, YUZ_HATLARI, hatKalemi);
             }
         }
+
+        if (mod == Ayarlar.Mod.CIZIM && havadaCizim != null) havadaCizimiCiz(tuval);
+
+        GestureRecognizerResult e = el;
+        if (e != null) elleriCiz(tuval, e);
+
+        if (f != null && ayarlar.etiketler && !f.faceLandmarks().isEmpty()) ifadeyiYaz(tuval, f);
+    }
+
+    private void renkleriAyarla(int renk) {
+        if (renk == sonRenk) return;
+        sonRenk = renk;
+        hatKalemi.setColor(renk);
+        elKalemi.setColor(renk);
+        cizimKalemi.setColor(renk);
+        etiketZemini.setColor(renk);
+        agKalemi.setColor((renk & 0x00FFFFFF) | 0x59000000);
+        // Eklemler renkten biraz açık
+        int r = ((renk >> 16) & 0xFF) + (255 - ((renk >> 16) & 0xFF)) * 3 / 5;
+        int g = ((renk >> 8) & 0xFF) + (255 - ((renk >> 8) & 0xFF)) * 3 / 5;
+        int b = (renk & 0xFF) + (255 - (renk & 0xFF)) * 3 / 5;
+        eklemKalemi.setColor(0xFF000000 | (r << 16) | (g << 8) | b);
+    }
+
+    private void arkaPlaniCiz(Canvas tuval, Bitmap katman) {
+        tuval.save();
+        if (aynali) tuval.scale(-1f, 1f, getWidth() / 2f, getHeight() / 2f);
+        kutu.set(kaymaX, kaymaY, kaymaX + resimGenisligi * olcek, kaymaY + resimYuksekligi * olcek);
+        tuval.drawBitmap(katman, null, kutu, filtre);
+        tuval.restore();
+    }
+
+    private void havadaCizimiCiz(Canvas tuval) {
+        for (float[][] cizgi : havadaCizim.cizgiler()) {
+            if (cizgi.length == 0) continue;
+            yol.reset();
+            yol.moveTo(x(cizgi[0][0]), y(cizgi[0][1]));
+            if (cizgi.length == 1) yol.lineTo(x(cizgi[0][0]) + 0.1f, y(cizgi[0][1]));
+            for (int i = 1; i < cizgi.length; i++) yol.lineTo(x(cizgi[i][0]), y(cizgi[i][1]));
+            tuval.drawPath(yol, cizimKalemi);
+        }
+    }
+
+    private void elleriCiz(Canvas tuval, GestureRecognizerResult e) {
+        List<List<NormalizedLandmark>> eller = e.landmarks();
+        for (int i = 0; i < eller.size(); i++) {
+            List<NormalizedLandmark> n = eller.get(i);
+            cizgileriCiz(tuval, n, EL, elKalemi);
+            NormalizedLandmark enUst = n.get(0);
+            for (NormalizedLandmark nokta : n) {
+                tuval.drawCircle(x(nokta.x()), y(nokta.y()), 3.5f * dp, eklemKalemi);
+                if (nokta.y() < enUst.y()) enUst = nokta;
+            }
+            if (!ayarlar.etiketler) continue;
+            StringBuilder metin = new StringBuilder(ElAnalizi.elEtiketi(ilkKategori(e.handedness(), i)));
+            String hareket = ElAnalizi.hareketAdi(ilkKategori(e.gestures(), i));
+            if (hareket != null) metin.append(" · ").append(hareket);
+            metin.append(" · ").append(ElAnalizi.parmakSayisi(n));
+            etiketCiz(tuval, metin.toString(), x(enUst.x()), y(enUst.y()) - 10f * dp, true);
+        }
+    }
+
+    /** Listenin i. elemanının en olası kategorisi (yoksa null). */
+    static String ilkKategori(List<List<Category>> liste, int i) {
+        if (i >= liste.size() || liste.get(i).isEmpty()) return null;
+        Category c = liste.get(i).get(0);
+        return c.score() >= 0.5f ? c.categoryName() : null;
+    }
+
+    private void ifadeyiYaz(Canvas tuval, FaceLandmarkerResult f) {
+        List<List<Category>> puanlar = f.faceBlendshapes().orElse(null);
+        if (puanlar == null || puanlar.isEmpty()) return;
+        List<String> ifadeler = IfadeAnalizi.ifadeler(puanlar.get(0));
+        if (ifadeler.isEmpty()) return;
+        NormalizedLandmark cene = f.faceLandmarks().get(0).get(CENE);
+        etiketCiz(tuval, TextUtils.join(" · ", ifadeler), x(cene.x()), y(cene.y()) + 12f * dp, false);
     }
 
     private void cizgileriCiz(Canvas tuval, List<NormalizedLandmark> noktalar, int[] baglantilar, Paint kalem) {
@@ -175,24 +300,25 @@ public class CizimView extends View {
             if (baglantilar[i] >= noktalar.size() || baglantilar[i + 1] >= noktalar.size()) continue;
             NormalizedLandmark a = noktalar.get(baglantilar[i]);
             NormalizedLandmark b = noktalar.get(baglantilar[i + 1]);
-            cizgiler[k++] = x(a);
-            cizgiler[k++] = y(a);
-            cizgiler[k++] = x(b);
-            cizgiler[k++] = y(b);
+            cizgiler[k++] = x(a.x());
+            cizgiler[k++] = y(a.y());
+            cizgiler[k++] = x(b.x());
+            cizgiler[k++] = y(b.y());
         }
         tuval.drawLines(cizgiler, 0, k, kalem);
     }
 
-    /** Etiketi verilen noktanın üstüne, ekran dışına taşmadan çizer. */
-    private void etiketCiz(Canvas tuval, String metin, float merkezX, float altY) {
+    /** Etiketi noktanın üstüne (ya da altına) ortalar; ekran dışına taşmaz. */
+    private void etiketCiz(Canvas tuval, String metin, float merkezX, float kenarY, boolean ustune) {
         float pay = 8f * dp;
         float genislik = etiketYazisi.measureText(metin) + 2 * pay;
-        float yukseklik = etiketYazisi.getTextSize() + 2 * pay * 0.75f;
+        float yukseklik = etiketYazisi.getTextSize() + 1.5f * pay;
+        float ust = ustune ? kenarY - yukseklik : kenarY;
         float sol = Math.max(0, Math.min(merkezX - genislik / 2, getWidth() - genislik));
-        float ust = Math.max(0, Math.min(altY - yukseklik, getHeight() - yukseklik));
-        etiketKutusu.set(sol, ust, sol + genislik, ust + yukseklik);
-        tuval.drawRoundRect(etiketKutusu, yukseklik / 3, yukseklik / 3, etiketZemini);
+        ust = Math.max(0, Math.min(ust, getHeight() - yukseklik));
+        kutu.set(sol, ust, sol + genislik, ust + yukseklik);
+        tuval.drawRoundRect(kutu, yukseklik / 3, yukseklik / 3, etiketZemini);
         Paint.FontMetrics m = etiketYazisi.getFontMetrics();
-        tuval.drawText(metin, sol + pay, etiketKutusu.centerY() - (m.ascent + m.descent) / 2, etiketYazisi);
+        tuval.drawText(metin, sol + pay, kutu.centerY() - (m.ascent + m.descent) / 2, etiketYazisi);
     }
 }

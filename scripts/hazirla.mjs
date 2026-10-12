@@ -21,6 +21,13 @@ const modeller = {
     'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite',
   'hand_landmarker.task':
     'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+  // Yalnızca Android (native): el hareketi, vücut iskeleti, arka plan ayırma
+  'gesture_recognizer.task':
+    'https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task',
+  'pose_landmarker_lite.task':
+    'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+  'selfie_segmenter.tflite':
+    'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite',
 };
 
 mkdirSync(join(hedef, 'wasm'), { recursive: true });

@@ -17,6 +17,14 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <!-- Fotoğraf çekilince kısa beyaz parlama -->
+    <View
+        android:id="@+id/flas"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:alpha="0"
+        android:background="@android:color/white" />
+
     <LinearLayout
         android:id="@+id/ust"
         android:layout_width="match_parent"
@@ -52,13 +60,153 @@
         <TextView android:id="@+id/fps" style="@style/Hap" />
     </LinearLayout>
 
-    <ImageButton
-        android:id="@+id/cevir"
-        android:layout_width="64dp"
-        android:layout_height="64dp"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="24dp"
-        android:background="@drawable/yuvarlak_zemin"
-        android:contentDescription="Kamerayı çevir"
-        android:src="@drawable/ic_kamera_cevir" />
+    <TextView
+        android:id="@+id/ipucu"
+        style="@style/Hap"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginTop="64dp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/oyun_yazisi"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:gravity="center"
+        android:shadowColor="#CC000000"
+        android:shadowRadius="12"
+        android:textColor="#FFFFFF"
+        android:textSize="34sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/alt"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:paddingBottom="20dp">
+
+        <LinearLayout
+            android:id="@+id/mod_paneli"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:gravity="center"
+            android:orientation="horizontal" />
+
+        <LinearLayout
+            android:id="@+id/modlar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:gravity="center"
+            android:orientation="horizontal" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageButton
+                android:id="@+id/ayarlar"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:background="@drawable/yuvarlak_zemin"
+                android:contentDescription="Ayarlar"
+                android:src="@drawable/ic_ayarlar" />
+
+            <ImageButton
+                android:id="@+id/deklansor"
+                android:layout_width="76dp"
+                android:layout_height="76dp"
+                android:layout_marginStart="40dp"
+                android:layout_marginEnd="40dp"
+                android:background="@drawable/deklansor"
+                android:contentDescription="Fotoğraf çek" />
+
+            <ImageButton
+                android:id="@+id/cevir"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:background="@drawable/yuvarlak_zemin"
+                android:contentDescription="Kamerayı çevir"
+                android:src="@drawable/ic_kamera_cevir" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/ayar_paneli"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:background="@drawable/panel_zemin"
+        android:clickable="true"
+        android:focusable="true"
+        android:orientation="vertical"
+        android:paddingStart="20dp"
+        android:paddingTop="20dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="20dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Ayarlar"
+            android:textColor="#E2E8F0"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            style="@style/AyarBasligi"
+            android:text="Çizgi rengi" />
+
+        <LinearLayout
+            android:id="@+id/renkler"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal" />
+
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/ayar_yuz_agi"
+            style="@style/AyarAnahtari"
+            android:text="Yüz ağı" />
+
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/ayar_etiketler"
+            style="@style/AyarAnahtari"
+            android:text="Etiketler (hareket, parmak, ifade)" />
+
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/ayar_vucut"
+            style="@style/AyarAnahtari"
+            android:text="Vücut iskeleti" />
+
+        <TextView
+            style="@style/AyarBasligi"
+            android:text="Arka plan" />
+
+        <LinearLayout
+            android:id="@+id/arka_planlar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal" />
+
+        <TextView
+            android:id="@+id/ayar_tamam"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="20dp"
+            android:background="@drawable/hap_zemin"
+            android:backgroundTint="#00E676"
+            android:gravity="center"
+            android:text="Tamam"
+            android:textColor="#0B1120"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+    </LinearLayout>
 </FrameLayout>

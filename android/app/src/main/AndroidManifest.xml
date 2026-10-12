@@ -46,6 +46,10 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Fotoğrafı galeriye kaydetmek: yalnızca Android 9 ve öncesinde izin gerekir -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
     <!-- Uygulama içi güncelleme: indirilen APK için Android kurulum ekranını açabilmek -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />

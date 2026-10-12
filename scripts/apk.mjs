@@ -14,9 +14,11 @@ const calistir = (komut, secenek = {}) => execSync(komut, { cwd: kok, stdio: 'in
 
 if (!existsSync(join(kok, 'android'))) calistir('npx cap add android');
 calistir('npm run build');
-// Native taraf yalnızca yüz ağı ve el modellerini kullanır (assets/public/mediapipe/models).
+// Native taraf kendi modellerini kullanır (assets/public/mediapipe/models); web'e ait olanlar APK'ya girmez.
 rmSync(join(kok, 'dist', 'mediapipe', 'wasm'), { recursive: true, force: true });
-rmSync(join(kok, 'dist', 'mediapipe', 'models', 'blaze_face_short_range.tflite'), { force: true });
+for (const model of ['blaze_face_short_range.tflite', 'hand_landmarker.task']) {
+  rmSync(join(kok, 'dist', 'mediapipe', 'models', model), { force: true });
+}
 calistir('npx cap sync android');
 
 const manifest = join(kok, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
@@ -39,7 +41,9 @@ if (!existsSync(yerel)) writeFileSync(yerel, `sdk.dir=${sdk.replaceAll('\\', '\\
 // Gradle sistemdeki yeni JDK ile çalışmayabilir; varsa Android Studio'nun JDK'sını kullan.
 const jbr = 'C:\\Program Files\\Android\\Android Studio\\jbr';
 const env = { ...process.env, ...(existsSync(jbr) && { JAVA_HOME: jbr }) };
-calistir(process.platform === 'win32' ? '.\\gradlew.bat assembleDebug --no-daemon -q' : './gradlew assembleDebug --no-daemon -q', {
+// Önce native birim testleri (parmak sayma, ifade, oyun...), sonra APK.
+const gorevler = 'testDebugUnitTest assembleDebug --no-daemon -q';
+calistir(process.platform === 'win32' ? `.\\gradlew.bat ${gorevler}` : `./gradlew ${gorevler}`, {
   cwd: join(kok, 'android'),
   env,
 });

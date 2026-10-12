@@ -1,8 +1,8 @@
 {
-  "surum": "1.3.0",
+  "surum": "1.3.1",
   "notlar": [
-    "Daha doğru parmak sayma (3B eklem açıları)",
-    "El hareketi, parmak sayısı ve sağ/sol etiketleri artık titremiyor",
-    "Yüz ifadeleri ve oyun daha kararlı; yanlış el algılaması azaldı"
+    "Takılma ve donma hataları giderildi",
+    "Daha akıcı arayüz, daha az bellek kullanımı",
+    "Yeni sürümler artık 1 dakika içinde görünüyor"
   ]
 }

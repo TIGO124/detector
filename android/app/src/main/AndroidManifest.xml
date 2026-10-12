@@ -24,6 +24,13 @@
 
         </activity>
 
+        <!-- Kamera ve algılama ekranı: MediaPipe native çalışır (web sürümünden çok daha hızlı) -->
+        <activity
+            android:name=".KameraActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@style/AppTheme.Kamera" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

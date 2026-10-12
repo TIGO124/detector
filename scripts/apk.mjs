@@ -1,9 +1,10 @@
 // Android APK üretir:
 //  1. Web uygulamasını derler ve Capacitor ile android/ klasörüne aktarır
+//     (Android algılamayı native yaptığı için web'in wasm dosyaları APK'ya girmez)
 //  2. Kamera iznini AndroidManifest.xml'e ekler (yoksa)
 //  3. Debug APK derler, Masaüstüne kopyalar; USB ile telefon bağlıysa kurar
 import { execSync } from 'node:child_process';
-import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +14,9 @@ const calistir = (komut, secenek = {}) => execSync(komut, { cwd: kok, stdio: 'in
 
 if (!existsSync(join(kok, 'android'))) calistir('npx cap add android');
 calistir('npm run build');
+// Native taraf yalnızca yüz ağı ve el modellerini kullanır (assets/public/mediapipe/models).
+rmSync(join(kok, 'dist', 'mediapipe', 'wasm'), { recursive: true, force: true });
+rmSync(join(kok, 'dist', 'mediapipe', 'models', 'blaze_face_short_range.tflite'), { force: true });
 calistir('npx cap sync android');
 
 const manifest = join(kok, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');

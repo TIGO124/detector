@@ -1,6 +1,10 @@
 {
-  "surum": "1.1.1",
+  "surum": "1.2.0",
   "notlar": [
-    "Kamera ekranına geri düğmesi eklendi"
+    "El hareketi tanıma ve parmak sayma",
+    "Yüz ifadeleri: gülümseme, göz kırpma, ağız açık, kaşlar",
+    "Modlar: havada çizim, yüz efektleri (gözlük, bıyık, şapka), taş-kağıt-makas oyunu",
+    "Ayarlar: çizgi rengi, yüz ağı, etiketler, vücut iskeleti, arka plan bulanık/değiştir",
+    "Fotoğraf çekme (galeriye kaydeder)"
   ]
 }

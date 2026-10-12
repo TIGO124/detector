@@ -110,6 +110,7 @@ public class KameraActivity extends AppCompatActivity {
         if ("GPU".equals(tercihler.getString(TERCIH_HIZLANDIRICI, "CPU"))) hizlandirici = Delegate.GPU;
         durumuYaz();
 
+        findViewById(R.id.geri).setOnClickListener(v -> finish());
         cevir.setOnClickListener(v -> {
             onKamera = !onKamera;
             kamerayiBagla();

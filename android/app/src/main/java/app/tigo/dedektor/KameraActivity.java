@@ -1,24 +1,14 @@
 package app.tigo.dedektor;
 
 import android.Manifest;
-import android.content.ContentResolver;
-import android.content.ContentValues;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
-import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.SystemClock;
-import android.provider.MediaStore;
-import android.text.SpannableStringBuilder;
-import android.text.Spanned;
-import android.text.style.ForegroundColorSpan;
-import android.text.style.StyleSpan;
 import android.util.Log;
 import android.util.Size;
 import android.view.View;
@@ -50,11 +40,7 @@ import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult;
 import com.google.mediapipe.tasks.vision.gesturerecognizer.GestureRecognizerResult;
 import com.google.mediapipe.tasks.vision.imagesegmenter.ImageSegmenterResult;
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult;
-import java.io.OutputStream;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -66,9 +52,6 @@ import java.util.concurrent.Executors;
 public class KameraActivity extends AppCompatActivity implements Algilayici.Dinleyici {
 
     private static final String ETIKET = "Dedektor";
-    private static final int KOYU = 0xFF0B1120;
-    private static final int SOLUK_ZEMIN = 0xB30B1120;
-    private static final int ACIK_YAZI = 0xFFE2E8F0;
     private static final String[] MOD_ADLARI = {"Normal", "Çizim", "Efekt", "Oyun"};
     private static final String[] EFEKT_ADLARI = {"Gözlük", "Bıyık", "Şapka", "Hepsi"};
     private static final String[] ARKA_PLAN_ADLARI = {"Kapalı", "Bulanık", "Değiştir"};
@@ -273,26 +256,8 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
         modPaneli.setVisibility(modPaneli.getChildCount() == 0 ? View.GONE : View.VISIBLE);
     }
 
-    /** Hap biçiminde seçenek; seçili olan çizgi renginde dolu. */
     private TextView cip(String metin, boolean secili, View.OnClickListener tik) {
-        TextView t = new TextView(this);
-        t.setText(metin);
-        t.setTextSize(14);
-        t.setTextColor(secili ? KOYU : ACIK_YAZI);
-        t.setTypeface(null, secili ? Typeface.BOLD : Typeface.NORMAL);
-        int yatay = (int) (14 * dp);
-        int dikey = (int) (8 * dp);
-        t.setPadding(yatay, dikey, yatay, dikey);
-        GradientDrawable zemin = new GradientDrawable();
-        zemin.setCornerRadius(999 * dp);
-        zemin.setColor(secili ? ayarlar.renk : SOLUK_ZEMIN);
-        t.setBackground(zemin);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.setMarginStart((int) (4 * dp));
-        lp.setMarginEnd((int) (4 * dp));
-        t.setLayoutParams(lp);
-        if (tik != null) t.setOnClickListener(tik);
-        return t;
+        return Cip.olustur(this, metin, secili, ayarlar.renk, tik);
     }
 
     // ---------- Ayarlar ----------
@@ -500,7 +465,7 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
     private void arkadaKaydet(Bitmap foto) {
         new Thread(() -> {
             try {
-                galeriyeKaydet(foto);
+                Galeri.kaydet(this, foto);
                 runOnUiThread(() -> toast("Fotoğraf galeriye kaydedildi."));
             } catch (Exception e) {
                 Log.e(ETIKET, "Fotoğraf kaydedilemedi", e);
@@ -509,43 +474,13 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
         }).start();
     }
 
-    private void galeriyeKaydet(Bitmap foto) throws Exception {
-        ContentResolver cr = getContentResolver();
-        ContentValues d = new ContentValues();
-        String ad = "Dedektor_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date()) + ".jpg";
-        d.put(MediaStore.Images.Media.DISPLAY_NAME, ad);
-        d.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
-        if (Build.VERSION.SDK_INT >= 29) {
-            d.put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Dedektor");
-            d.put(MediaStore.Images.Media.IS_PENDING, 1);
-        }
-        Uri uri = cr.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, d);
-        if (uri == null) throw new IllegalStateException("Galeriye yazılamadı");
-        try (OutputStream cikis = cr.openOutputStream(uri)) {
-            if (cikis == null || !foto.compress(Bitmap.CompressFormat.JPEG, 92, cikis)) throw new IllegalStateException("JPEG yazılamadı");
-        }
-        if (Build.VERSION.SDK_INT >= 29) {
-            d.clear();
-            d.put(MediaStore.Images.Media.IS_PENDING, 0);
-            cr.update(uri, d, null, null);
-        }
-    }
-
     // ---------- Durum ----------
 
     private void durumuYaz() {
-        yuzSayisi.setText(hap("Yüz", sonYuzSayisi));
-        elSayisi.setText(hap("El", sonElSayisi));
+        yuzSayisi.setText(Cip.sayac("Yüz", sonYuzSayisi, ayarlar.renk));
+        elSayisi.setText(Cip.sayac("El", sonElSayisi, ayarlar.renk));
         int fps = Math.round(Math.min(algilayici.yuz.fps.deger(), algilayici.el.fps.deger()));
         fpsYazisi.setText(fps + " FPS · " + (ayarlar.gpu ? "GPU" : "CPU"));
-    }
-
-    private CharSequence hap(String ad, int sayi) {
-        SpannableStringBuilder s = new SpannableStringBuilder(ad + "  " + sayi);
-        int bas = ad.length() + 2;
-        s.setSpan(new ForegroundColorSpan(ayarlar.renk), bas, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        s.setSpan(new StyleSpan(Typeface.BOLD), bas, s.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        return s;
     }
 
     private void toast(String mesaj) {

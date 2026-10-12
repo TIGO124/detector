@@ -1,7 +1,6 @@
 {
-  "surum": "1.1.0",
+  "surum": "1.1.1",
   "notlar": [
-    "Algılama artık native: çok daha hızlı",
-    "FPS yazısına dokunarak CPU/GPU seçilebilir"
+    "Kamera ekranına geri düğmesi eklendi"
   ]
 }

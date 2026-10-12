@@ -1,8 +1,6 @@
 {
-  "surum": "1.3.1",
+  "surum": "1.4.0",
   "notlar": [
-    "Takılma ve donma hataları giderildi",
-    "Daha akıcı arayüz, daha az bellek kullanımı",
-    "Yeni sürümler artık 1 dakika içinde görünüyor"
+    "Yapay zeka modu: kendi el hareketlerini öğret, TİD harfleri, duygu, kişi tanıma ve egzersiz sayacı"
   ]
 }

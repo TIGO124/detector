@@ -213,7 +213,7 @@ public class CizimView extends View {
         if (katman != null && ayarlar.arkaPlan != Ayarlar.ArkaPlan.KAPALI) arkaPlaniCiz(tuval, katman);
 
         PoseLandmarkerResult v = vucut;
-        if (v != null && ayarlar.vucut) {
+        if (v != null && ayarlar.vucutGerekli()) {
             for (List<NormalizedLandmark> n : v.landmarks()) {
                 cizgileriCiz(tuval, n, VUCUT, elKalemi);
                 for (int i = 11; i < n.size(); i++) tuval.drawCircle(x(n.get(i).x()), y(n.get(i).y()), 4f * dp, eklemKalemi);
@@ -235,9 +235,11 @@ public class CizimView extends View {
 
         if (mod == Ayarlar.Mod.CIZIM && havadaCizim != null) havadaCizimiCiz(tuval);
 
-        elleriCiz(tuval, eller);
+        // Yapay zekâ modunda etiketler sonucun kendisi: ayardan bağımsız gösterilir.
+        boolean etiket = ayarlar.etiketler || mod == Ayarlar.Mod.YZ;
+        elleriCiz(tuval, eller, etiket, mod == Ayarlar.Mod.YZ);
 
-        if (f != null && ayarlar.etiketler && !f.faceLandmarks().isEmpty()) ifadeyiYaz(tuval, f, ifadeler);
+        if (f != null && etiket && !f.faceLandmarks().isEmpty()) ifadeyiYaz(tuval, f, ifadeler);
     }
 
     private void renkleriAyarla(int renk) {
@@ -274,7 +276,7 @@ public class CizimView extends View {
         }
     }
 
-    private void elleriCiz(Canvas tuval, List<ElTakibi.ElDurumu> eller) {
+    private void elleriCiz(Canvas tuval, List<ElTakibi.ElDurumu> eller, boolean etiket, boolean yz) {
         for (ElTakibi.ElDurumu el : eller) {
             List<NormalizedLandmark> n = el.noktalar;
             cizgileriCiz(tuval, n, EL, elKalemi);
@@ -283,11 +285,15 @@ public class CizimView extends View {
                 tuval.drawCircle(x(nokta.x()), y(nokta.y()), 3.5f * dp, eklemKalemi);
                 if (nokta.y() < enUst.y()) enUst = nokta;
             }
-            if (!ayarlar.etiketler) continue;
+            if (!etiket) continue;
             StringBuilder metin = new StringBuilder(el.taraf);
-            String hareket = ElAnalizi.hareketAdi(el.hareketKodu);
-            if (hareket != null) metin.append(" · ").append(hareket);
-            metin.append(" · ").append(el.parmak);
+            if (yz) {
+                if (el.yzEtiketi != null) metin.append(" · ").append(el.yzEtiketi);
+            } else {
+                String hareket = ElAnalizi.hareketAdi(el.hareketKodu);
+                if (hareket != null) metin.append(" · ").append(hareket);
+                metin.append(" · ").append(el.parmak);
+            }
             etiketCiz(tuval, metin.toString(), x(enUst.x()), y(enUst.y()) - 10f * dp, true);
         }
     }

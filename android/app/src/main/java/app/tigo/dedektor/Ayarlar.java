@@ -5,7 +5,10 @@ import android.content.SharedPreferences;
 /** Kamera ekranı ayarları; telefonda saklanır. Alanlar birden çok iş parçacığından okunur. */
 final class Ayarlar {
 
-    enum Mod { NORMAL, CIZIM, EFEKT, OYUN }
+    enum Mod { NORMAL, CIZIM, EFEKT, OYUN, YZ }
+
+    /** Yapay zekâ modunun alt modları. */
+    enum Yz { HAREKET, TID, DUYGU, KISI, EGZERSIZ }
 
     enum ArkaPlan { KAPALI, BULANIK, DEGISTIR }
 
@@ -20,6 +23,7 @@ final class Ayarlar {
     volatile ArkaPlan arkaPlan = ArkaPlan.KAPALI;
     volatile Mod mod = Mod.NORMAL;
     volatile Efekt efekt = Efekt.GOZLUK;
+    volatile Yz yz = Yz.HAREKET;
     volatile boolean gpu = false;
 
     private final SharedPreferences tercihler;
@@ -33,6 +37,7 @@ final class Ayarlar {
         arkaPlan = sec(ArkaPlan.values(), tercihler.getString("arkaPlan", null), arkaPlan);
         mod = sec(Mod.values(), tercihler.getString("mod", null), mod);
         efekt = sec(Efekt.values(), tercihler.getString("efekt", null), efekt);
+        yz = sec(Yz.values(), tercihler.getString("yz", null), yz);
         gpu = "GPU".equals(tercihler.getString("hizlandirici", "CPU"));
     }
 
@@ -45,8 +50,14 @@ final class Ayarlar {
             .putString("arkaPlan", arkaPlan.name())
             .putString("mod", mod.name())
             .putString("efekt", efekt.name())
+            .putString("yz", yz.name())
             .putString("hizlandirici", gpu ? "GPU" : "CPU")
             .apply();
+    }
+
+    /** Vücut modeli açık mı: ayarlardan ya da egzersiz sayarken. */
+    boolean vucutGerekli() {
+        return vucut || (mod == Mod.YZ && yz == Yz.EGZERSIZ);
     }
 
     private static <E extends Enum<E>> E sec(E[] degerler, String ad, E varsayilan) {

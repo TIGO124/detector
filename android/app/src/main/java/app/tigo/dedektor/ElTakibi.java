@@ -28,6 +28,8 @@ final class ElTakibi {
         final String hareket;
         final float hareketPuani;
         final boolean[] acikParmaklar;
+        /** 3B "dünya" noktaları (metre); yapay zekâ öznitelikleri için. Yoksa null. */
+        float[][] dunya;
 
         ElOlcumu(List<NormalizedLandmark> noktalar, float bilekX, float bilekY, float sagOlasiligi,
                  String hareket, float hareketPuani, boolean[] acikParmaklar) {
@@ -49,6 +51,9 @@ final class ElTakibi {
         final String hareketKodu;
         final int parmak;
         final boolean isaret;
+        float[][] dunya;
+        /** Yapay zekâ modunda tanınan hareket ya da harf; yoksa null. */
+        String yzEtiketi;
 
         ElDurumu(List<NormalizedLandmark> noktalar, String taraf, String hareketKodu, int parmak, boolean isaret) {
             this.noktalar = noktalar;
@@ -90,9 +95,11 @@ final class ElTakibi {
             Category taraf = ilk(sonuc.handedness(), i);
             float sag = taraf == null ? 0.5f : "Right".equals(taraf.categoryName()) ? taraf.score() : 1f - taraf.score();
             Category hareket = ilk(sonuc.gestures(), i);
-            liste.add(new ElOlcumu(n, n.get(0).x(), n.get(0).y(), sag,
+            ElOlcumu o = new ElOlcumu(n, n.get(0).x(), n.get(0).y(), sag,
                 hareket == null ? null : hareket.categoryName(), hareket == null ? 0f : hareket.score(),
-                ElAnalizi.acikParmaklar(noktalar)));
+                ElAnalizi.acikParmaklar(noktalar));
+            o.dunya = noktalar;
+            liste.add(o);
         }
         return liste;
     }
@@ -118,8 +125,10 @@ final class ElTakibi {
             ekle(iz.hareketler, o.hareket != null && o.hareketPuani >= HAREKET_ESIGI && !"None".equals(o.hareket) ? o.hareket : "");
             ekle(iz.isaretler, ElAnalizi.isaretEdiyor(o.acikParmaklar));
             yeniIzler.add(iz);
-            durumlar.add(new ElDurumu(o.noktalar, iz.sagOlasiligi >= 0.5f ? "Sağ el" : "Sol el",
-                cogunluk(iz.hareketler, GECMIS / 2), enCok(iz.parmaklar), sonOylar(iz.isaretler, 3)));
+            ElDurumu d = new ElDurumu(o.noktalar, iz.sagOlasiligi >= 0.5f ? "Sağ el" : "Sol el",
+                cogunluk(iz.hareketler, GECMIS / 2), enCok(iz.parmaklar), sonOylar(iz.isaretler, 3));
+            d.dunya = o.dunya;
+            durumlar.add(d);
         }
         izler = yeniIzler;
         return Collections.unmodifiableList(durumlar);

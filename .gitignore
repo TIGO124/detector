@@ -3,3 +3,8 @@ dist/
 public/mediapipe/
 .claude/
 .claude-flow/
+
+# Yapay zekâ eğitimi: Python ortamı ve indirilen veri setleri (büyük, depoya girmez)
+egitim/.venv/
+egitim/veri/
+__pycache__/

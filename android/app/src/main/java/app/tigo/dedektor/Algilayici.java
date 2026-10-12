@@ -35,7 +35,8 @@ import java.util.function.BiConsumer;
 final class Algilayici {
 
     interface Dinleyici {
-        void yuz(FaceLandmarkerResult sonuc, int genislik, int yukseklik);
+        /** girdi: kamera karesi; yalnızca bu çağrı sırasında geçerli (sonra havuza döner). */
+        void yuz(FaceLandmarkerResult sonuc, MPImage girdi);
 
         void el(GestureRecognizerResult sonuc, int genislik, int yukseklik);
 
@@ -154,11 +155,15 @@ final class Algilayici {
             return temelModelleriKur(false);
         }
         // Açık olan isteğe bağlı modeller de aynı hızlandırıcıya geçsin.
-        if (vucut.acik()) vucutAyarla(true);
+        if (vucut.acik()) {
+            vucut.kapat();
+            vucutAyarla(true);
+        }
         return gpu;
     }
 
     void vucutAyarla(boolean ac) {
+        if (ac == vucut.acik()) return;
         vucut.kapat();
         if (!ac) return;
         int n = vucut.nesil;
@@ -281,7 +286,7 @@ final class Algilayici {
             .setMinTrackingConfidence(0.6f)
             // Gülümseme, göz kırpma gibi ifadeler için.
             .setOutputFaceBlendshapes(true)
-            .setResultListener((sonuc, girdi) -> sonucuIsle(yuz, n, () -> dinleyici.yuz(sonuc, girdi.getWidth(), girdi.getHeight())))
+            .setResultListener((sonuc, girdi) -> sonucuIsle(yuz, n, () -> dinleyici.yuz(sonuc, girdi)))
             .setErrorListener(h -> hata(yuz, n, "Yüz", h))
             .build());
         yuz.kapatici = m::close;

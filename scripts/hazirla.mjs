@@ -3,7 +3,7 @@
 //  - yüz ağı, yüz (GPU doğrulaması için) ve el modelleri (yoksa) Google'ın
 //    resmi deposundan indirilir
 // Böylece uygulama (ve APK) internetsiz çalışır.
-import { copyFileSync, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -11,12 +11,8 @@ const kok = join(dirname(fileURLToPath(import.meta.url)), '..');
 const hedef = join(kok, 'public', 'mediapipe');
 const kaynakWasm = join(kok, 'node_modules', '@mediapipe', 'tasks-vision', 'wasm');
 
-const wasmDosyalari = [
-  'vision_wasm_internal.js',
-  'vision_wasm_internal.wasm',
-  'vision_wasm_nosimd_internal.js',
-  'vision_wasm_nosimd_internal.wasm',
-];
+// Modeller worker'da çalıştığı için MediaPipe'ın ES modül sürümü kullanılır.
+const wasmDosyalari = ['vision_wasm_module_internal.js', 'vision_wasm_module_internal.wasm'];
 
 const modeller = {
   'face_landmarker.task':
@@ -29,6 +25,11 @@ const modeller = {
 
 mkdirSync(join(hedef, 'wasm'), { recursive: true });
 mkdirSync(join(hedef, 'models'), { recursive: true });
+
+// Artık kullanılmayan eski dosyalar APK'ya girmesin.
+for (const ad of readdirSync(join(hedef, 'wasm'))) {
+  if (!wasmDosyalari.includes(ad)) rmSync(join(hedef, 'wasm', ad));
+}
 
 for (const ad of wasmDosyalari) {
   const kaynak = join(kaynakWasm, ad);

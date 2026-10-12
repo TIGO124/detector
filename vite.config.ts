@@ -6,4 +6,6 @@ const { version } = JSON.parse(readFileSync(new URL('./package.json', import.met
 
 export default defineConfig({
   define: { __SURUM__: JSON.stringify(version) },
+  // Modeller worker'da çalışır; MediaPipe'ın modül sürümü import() ile yüklenir.
+  worker: { format: 'es' },
 });

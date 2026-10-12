@@ -1,7 +1,8 @@
 import './style.css';
 import { ciz } from './ciz';
-import { Dedektor } from './dedektor';
+import type { Sonuc } from './dedektor';
 import { guncellemeAlaniniKur } from './guncellemeAlani';
+import type { IsciCevabi, IsciIstegi } from './isci';
 
 const video = document.querySelector<HTMLVideoElement>('#video')!;
 const tuval = document.querySelector<HTMLCanvasElement>('#tuval')!;
@@ -15,7 +16,14 @@ const elSayisi = document.querySelector<HTMLElement>('#el-sayisi')!;
 const fps = document.querySelector<HTMLElement>('#fps')!;
 const cevir = document.querySelector<HTMLButtonElement>('#cevir')!;
 
-let dedektor: Dedektor | null = null;
+// Modeller worker'da çalışır; ana iş parçacığı yalnızca kare gönderir ve sonucu çizer.
+const isci = new Worker(new URL('./isci.ts', import.meta.url), { type: 'module' });
+const gonder = (istek: IsciIstegi, aktar: Transferable[] = []) => isci.postMessage(istek, aktar);
+/** Modele giden karenin uzun kenarı; modeller zaten 256 pikselden küçük girdi kullanır. */
+const EN_UZUN_KENAR = 640;
+
+let isciHazir: Promise<void> | null = null;
+let isciMesgul = false;
 let yon: 'user' | 'environment' = 'user';
 let aynali = true;
 let akis: MediaStream | null = null;
@@ -49,29 +57,68 @@ async function kamerayiAc() {
   sonKareZamani = -1;
 }
 
-function kare() {
-  try {
-    if (dedektor && video.readyState >= 2 && video.currentTime !== sonKareZamani) {
-      sonKareZamani = video.currentTime;
-      if (tuval.width !== video.videoWidth || tuval.height !== video.videoHeight) {
-        tuval.width = video.videoWidth;
-        tuval.height = video.videoHeight;
-      }
-      const sonuc = dedektor.tespit(video);
-      ciz(ctx, sonuc, aynali);
-      yuzSayisi.textContent = String(sonuc.yuz.faceLandmarks.length);
-      elSayisi.textContent = String(sonuc.el.landmarks.length);
+/** Modelleri worker'da bir kez yükler. Hata olursa sonraki çağrı yeniden dener. */
+function isciyiBaslat(): Promise<void> {
+  isciHazir ??= new Promise<void>((coz, reddet) => {
+    const dinle = ({ data }: MessageEvent<IsciCevabi>) => {
+      if (data.tur !== 'hazir' && data.tur !== 'hata') return;
+      isci.removeEventListener('message', dinle);
+      if (data.tur === 'hazir') return coz();
+      isciHazir = null;
+      reddet(new Error(data.mesaj));
+    };
+    isci.addEventListener('message', dinle);
+    gonder({ tur: 'baslat' });
+  });
+  return isciHazir;
+}
 
-      const an = performance.now();
-      if (oncekiAn) fpsOrt = fpsOrt * 0.9 + (1000 / (an - oncekiAn)) * 0.1;
-      oncekiAn = an;
-      fps.textContent = `${Math.round(fpsOrt)} FPS · ${dedektor.hizlandirici}`;
-    }
-  } catch (hata) {
-    console.error(hata);
-  } finally {
-    sonrakiKare();
+isci.addEventListener('message', ({ data }: MessageEvent<IsciCevabi>) => {
+  if (!isciMesgul) return;
+  isciMesgul = false;
+  if (data.tur === 'sonuc') sonucuCiz(data.sonuc, data.hizlandirici);
+  else if (data.tur === 'hata') console.error(data.mesaj);
+});
+
+function sonucuCiz(sonuc: Sonuc, hizlandirici: string) {
+  if (tuval.width !== video.videoWidth || tuval.height !== video.videoHeight) {
+    tuval.width = video.videoWidth;
+    tuval.height = video.videoHeight;
   }
+  ciz(ctx, sonuc, aynali);
+  yuzSayisi.textContent = String(sonuc.yuz.faceLandmarks.length);
+  elSayisi.textContent = String(sonuc.el.landmarks.length);
+
+  const an = performance.now();
+  if (oncekiAn) fpsOrt = fpsOrt * 0.9 + (1000 / (an - oncekiAn)) * 0.1;
+  oncekiAn = an;
+  fps.textContent = `${Math.round(fpsOrt)} FPS · ${hizlandirici}`;
+}
+
+/** Güncel kareyi küçültüp worker'a aktarır (kopyalamadan). */
+async function kareGonder() {
+  isciMesgul = true;
+  try {
+    const olcek = Math.min(1, EN_UZUN_KENAR / Math.max(video.videoWidth, video.videoHeight));
+    const kare = await createImageBitmap(video, {
+      resizeWidth: Math.round(video.videoWidth * olcek),
+      resizeHeight: Math.round(video.videoHeight * olcek),
+      resizeQuality: 'low',
+    });
+    gonder({ tur: 'kare', kare }, [kare]);
+  } catch (hata) {
+    isciMesgul = false;
+    console.error(hata);
+  }
+}
+
+function kare() {
+  // Worker önceki kareyle meşgulse bu kare atlanır; video yine akıcı oynar.
+  if (!isciMesgul && video.readyState >= 2 && video.currentTime !== sonKareZamani) {
+    sonKareZamani = video.currentTime;
+    void kareGonder();
+  }
+  sonrakiKare();
 }
 
 function sonrakiKare() {
@@ -83,7 +130,7 @@ baslat.addEventListener('click', async () => {
   baslat.disabled = true;
   mesaj.textContent = 'Modeller yükleniyor…';
   try {
-    dedektor ??= await Dedektor.olustur();
+    await isciyiBaslat();
     mesaj.textContent = 'Kamera açılıyor…';
     await kamerayiAc();
     giris.hidden = true;
@@ -114,3 +161,5 @@ cevir.addEventListener('click', async () => {
 });
 
 guncellemeAlaniniKur();
+// Kullanıcı giriş ekranını okurken modeller yüklenmeye başlasın.
+isciyiBaslat().catch(() => undefined);

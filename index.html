@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b1120" />
+    <title>Dedektör</title>
+  </head>
+  <body>
+    <main id="sahne">
+      <video id="video" playsinline muted></video>
+      <canvas id="tuval"></canvas>
+    </main>
+
+    <header id="ust" hidden>
+      <span class="hap">Yüz <b id="yuz-sayisi">0</b></span>
+      <span class="hap">El <b id="el-sayisi">0</b></span>
+      <span class="hap" id="fps">–</span>
+    </header>
+
+    <button id="cevir" type="button" aria-label="Kamerayı çevir" hidden>
+      <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M20 7h-3l-2-3H9L7 7H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1Z" />
+        <path d="M9 13a3 3 0 0 1 5.2-2" /><path d="M15 13a3 3 0 0 1-5.2 2" />
+        <path d="M14 9.5V11h-1.5" /><path d="M10 16.5V15h1.5" />
+      </svg>
+    </button>
+
+    <section id="giris">
+      <h1>Dedektör</h1>
+      <p>Kamerada yüzünü ve ellerini gerçek zamanlı algılar. Görüntü cihazdan çıkmaz.</p>
+      <button id="baslat" type="button">Başlat</button>
+      <p id="mesaj" role="status"></p>
+
+      <footer id="guncelleme">
+        <span id="surum"></span>
+        <div id="yeni-surum" hidden>
+          <strong id="yeni-baslik"></strong>
+          <ul id="yeni-notlar"></ul>
+          <button id="guncelle" type="button">Güncelle</button>
+        </div>
+        <button id="denetle" type="button" hidden>Güncellemeleri denetle</button>
+        <p id="guncelleme-durum" role="status"></p>
+      </footer>
+    </section>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

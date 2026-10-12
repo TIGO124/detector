@@ -1,0 +1,62 @@
+// Android APK üretir:
+//  1. Web uygulamasını derler ve Capacitor ile android/ klasörüne aktarır
+//  2. Kamera iznini AndroidManifest.xml'e ekler (yoksa)
+//  3. Debug APK derler, Masaüstüne kopyalar; USB ile telefon bağlıysa kurar
+import { execSync } from 'node:child_process';
+import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const kok = join(dirname(fileURLToPath(import.meta.url)), '..');
+const calistir = (komut, secenek = {}) => execSync(komut, { cwd: kok, stdio: 'inherit', ...secenek });
+
+if (!existsSync(join(kok, 'android'))) calistir('npx cap add android');
+calistir('npm run build');
+calistir('npx cap sync android');
+
+const manifest = join(kok, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
+let xml = readFileSync(manifest, 'utf8');
+if (!xml.includes('android.permission.CAMERA')) {
+  xml = xml.replace(
+    '</manifest>',
+    '    <uses-permission android:name="android.permission.CAMERA" />\n' +
+      '    <uses-feature android:name="android.hardware.camera" android:required="false" />\n' +
+      '</manifest>',
+  );
+  writeFileSync(manifest, xml);
+  console.log('Kamera izni AndroidManifest.xml dosyasına eklendi.');
+}
+
+const sdk = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT || join(homedir(), 'AppData', 'Local', 'Android', 'Sdk');
+const yerel = join(kok, 'android', 'local.properties');
+if (!existsSync(yerel)) writeFileSync(yerel, `sdk.dir=${sdk.replaceAll('\\', '\\\\')}\n`);
+
+// Gradle sistemdeki yeni JDK ile çalışmayabilir; varsa Android Studio'nun JDK'sını kullan.
+const jbr = 'C:\\Program Files\\Android\\Android Studio\\jbr';
+const env = { ...process.env, ...(existsSync(jbr) && { JAVA_HOME: jbr }) };
+calistir(process.platform === 'win32' ? '.\\gradlew.bat assembleDebug --no-daemon -q' : './gradlew assembleDebug --no-daemon -q', {
+  cwd: join(kok, 'android'),
+  env,
+});
+
+const apk = join(kok, 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+const masaustu = join(homedir(), 'Desktop', 'Dedektor.apk');
+copyFileSync(apk, masaustu);
+console.log(`\nAPK hazır: ${masaustu}`);
+
+const adb = join(sdk, 'platform-tools', 'adb');
+try {
+  const cihazlar = execSync(`"${adb}" devices`, { encoding: 'utf8' })
+    .split('\n')
+    .slice(1)
+    .filter((satir) => /\tdevice\s*$/.test(satir));
+  if (cihazlar.length === 1) {
+    console.log('Bağlı telefona kuruluyor…');
+    execSync(`"${adb}" install -r "${apk}"`, { stdio: 'inherit' });
+  } else {
+    console.log('Telefona kurmak için APK dosyasını telefona atıp açın (ya da USB hata ayıklama ile bağlayıp tekrar çalıştırın).');
+  }
+} catch {
+  console.log('adb bulunamadı; APK dosyasını telefona atıp açın.');
+}

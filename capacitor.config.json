@@ -1,0 +1,13 @@
+{
+  "appId": "app.tigo.dedektor",
+  "appName": "Dedektör",
+  "webDir": "dist",
+  "android": {
+    "backgroundColor": "#0b1120"
+  },
+  "plugins": {
+    "SystemBars": {
+      "style": "DARK"
+    }
+  }
+}

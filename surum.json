@@ -1,7 +1,7 @@
 {
-  "surum": "1.0.1",
+  "surum": "1.1.0",
   "notlar": [
-    "Kasma giderildi: algılama arka planda çalışıyor",
-    "Çizgiler daha sık güncelleniyor"
+    "Algılama artık native: çok daha hızlı",
+    "FPS yazısına dokunarak CPU/GPU seçilebilir"
   ]
 }

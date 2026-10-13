@@ -7,6 +7,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.LayerDrawable;
 import android.view.View;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import androidx.appcompat.widget.SwitchCompat;
 import java.util.function.Consumer;
 
@@ -22,6 +23,8 @@ final class AyarPaneli {
     private final Activity etkinlik;
     private final Ayarlar ayarlar;
     private final CizimView cizim;
+    /** Kaydırma kabı (görünürlük) ve içindeki yaprak (zemin, alt boşluk). */
+    private final ScrollView kap;
     private final View panel;
     private final LinearLayout renkler;
     private final LinearLayout arkaPlanlar;
@@ -43,6 +46,7 @@ final class AyarPaneli {
         this.vucutDegisti = vucutDegisti;
         this.arkaPlanDegisti = arkaPlanDegisti;
         this.gpuSecildi = gpuSecildi;
+        kap = etkinlik.findViewById(R.id.ayar_kaydirma);
         panel = etkinlik.findViewById(R.id.ayar_paneli);
         renkler = etkinlik.findViewById(R.id.renkler);
         arkaPlanlar = etkinlik.findViewById(R.id.arka_planlar);
@@ -59,12 +63,15 @@ final class AyarPaneli {
     }
 
     boolean acik() {
-        return panel.getVisibility() == View.VISIBLE;
+        return kap.getVisibility() == View.VISIBLE;
     }
 
     void ac(boolean ac) {
-        if (ac) hizlandiriciyiGoster();
-        panel.setVisibility(ac ? View.VISIBLE : View.GONE);
+        if (ac) {
+            hizlandiriciyiGoster();
+            kap.scrollTo(0, 0);
+        }
+        kap.setVisibility(ac ? View.VISIBLE : View.GONE);
     }
 
     private void kur() {

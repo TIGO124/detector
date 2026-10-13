@@ -159,6 +159,13 @@ button:disabled {
     calc(var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)) + 24px);
   background: var(--zemin);
   overflow-y: auto;
+  align-items: center;
+}
+
+/* Geniş ekranda (tarayıcı) içerik telefon genişliğinde ortada kalsın. */
+#giris > * {
+  width: 100%;
+  max-width: 440px;
 }
 
 .marka {

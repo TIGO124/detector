@@ -13,6 +13,7 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -43,6 +44,8 @@ final class OgretPaneli {
     private final YzTanima yz;
     /** Model ya da kayıtlar değişince (ipuçları güncellensin). */
     private final Runnable degisti;
+    /** Kaydırma kabı (görünürlük) ve içindeki yaprak (zemin, alt boşluk). */
+    private final ScrollView kap;
     private final View panel;
     private final TextView baslik;
     private final TextView aciklama;
@@ -62,6 +65,8 @@ final class OgretPaneli {
     private final ActivityResultLauncher<String[]> modelSecici;
     private Ayarlar.Yz tur;
     private boolean mesgul;
+    /** Kaydet'e basıldı, kayıt henüz başlamadı (3-2-1). */
+    private boolean geriSayiyor;
 
     OgretPaneli(AppCompatActivity etkinlik, Ayarlar ayarlar, YzTanima yz, TextView geriSayim, Runnable degisti) {
         this.etkinlik = etkinlik;
@@ -69,6 +74,7 @@ final class OgretPaneli {
         this.yz = yz;
         this.geriSayim = geriSayim;
         this.degisti = degisti;
+        kap = etkinlik.findViewById(R.id.ogret_kaydirma);
         panel = etkinlik.findViewById(R.id.ogret_paneli);
         baslik = etkinlik.findViewById(R.id.ogret_baslik);
         aciklama = etkinlik.findViewById(R.id.ogret_aciklama);
@@ -102,12 +108,26 @@ final class OgretPaneli {
     }
 
     boolean acik() {
-        return panel.getVisibility() == View.VISIBLE;
+        return kap.getVisibility() == View.VISIBLE;
     }
 
+    /**
+     * Yaprak kapanırken (çarpı, geri tuşu, başka bölüme geçiş) geri sayım iptal edilir; süren
+     * kayıt hemen biter ve o ana kadar alınan örnekler kaydedilir. Yoksa sayaç ekranda kalır ve
+     * kayıt artık görünmeyen bölüm için başlardı.
+     */
     void kapat() {
         klavyeyiKapat();
-        panel.setVisibility(View.GONE);
+        kap.setVisibility(View.GONE);
+        if (geriSayiyor) {
+            ana.removeCallbacksAndMessages(null);
+            geriSayiyor = false;
+            mesgul = false;
+            geriSayim.setVisibility(View.GONE);
+            durum.setText(null);
+        } else if (tur != null && yz.kayitta(tur)) {
+            yz.kaydiKes();
+        }
     }
 
     void ac(Ayarlar.Yz tur) {
@@ -138,7 +158,8 @@ final class OgretPaneli {
         ilerleme.setVisibility(View.GONE);
         egitimDugmeleri.setVisibility(egitimsiz() ? View.GONE : View.VISIBLE);
         etiketleriGoster();
-        panel.setVisibility(View.VISIBLE);
+        kap.scrollTo(0, 0);
+        kap.setVisibility(View.VISIBLE);
     }
 
     private void yazilar(String b, String a, String ipucu, String liste) {
@@ -217,11 +238,13 @@ final class OgretPaneli {
         }
         klavyeyiKapat();
         mesgul = true;
+        geriSayiyor = true;
         for (int i = 0; i < GERI_SAYIM; i++) {
             String s = String.valueOf(GERI_SAYIM - i);
             ana.postDelayed(() -> sayacYaz(s, Cip.YAZI), i * 1000L);
         }
         ana.postDelayed(() -> {
+            geriSayiyor = false;
             yz.kayitBaslat(tur, ad);
             kayitGorunumu(true);
             ilerleme.setProgressTintList(ColorStateList.valueOf(KAYIT));
@@ -279,6 +302,8 @@ final class OgretPaneli {
             try {
                 SinirAgi.Sonuc s = yz.egit(t, oran -> ana.post(() -> ilerleme.setProgress(Math.round(oran * 100))));
                 sonuc = "Eğitildi · doğruluk %" + Math.round(100 * s.dogruluk);
+                // Öğretilenler birbirine çok benziyorsa model ayıramaz: ne yapılacağını söyle.
+                if (s.dogruluk < 0.7f) sonuc += ". Öğrettiklerin birbirine çok benziyor; daha farklı göster ya da her birini birkaç kez daha kaydet.";
             } catch (IllegalStateException e) {
                 sonuc = e.getMessage();
             } catch (Exception e) {
@@ -293,6 +318,10 @@ final class OgretPaneli {
     private void disaAktar() {
         if (mesgul) return;
         Ayarlar.Yz t = tur;
+        if (yz.veri(t).toplam() == 0) {
+            durum.setText("Gönderilecek örnek yok. Önce bir şey kaydet.");
+            return;
+        }
         is.execute(() -> {
             try {
                 File f = yz.disaAktar(t);

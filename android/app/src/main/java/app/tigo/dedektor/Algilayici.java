@@ -51,6 +51,12 @@ final class Algilayici {
         void nesne(ObjectDetectorResult sonuc, MPImage girdi);
 
         void bildir(String mesaj);
+
+        /**
+         * GPU ile kurulan modeller çalışırken bozuldu (kurulum başarılı olsa da bazı telefonlarda
+         * GPU sonuç vermiyor). Her GPU kurulumunda en çok bir kez, model iş parçacığından çağrılır.
+         */
+        void gpuCalismadi();
     }
 
     /** Modeller web dosyalarının yanında, APK'nın assets/public klasöründe durur. */
@@ -58,6 +64,11 @@ final class Algilayici {
     private static final String ETIKET = "Dedektor";
     /** Bu kadar süredir sonuç vermeyen model takılmış sayılır ve yeniden kare alır. */
     private static final long TAKILMA_MS = 2000;
+    /**
+     * GPU'da ilk çalıştırma gölgelendirici derlerken zayıf telefonlarda saniyeler sürebilir:
+     * hiç sonuç vermeden bu kadar takılırsa GPU çalışmıyor sayılır (gerçek hata hemen sayılır).
+     */
+    private static final long GPU_SABIR_MS = 8000;
     private static final int HAVUZ_BOYUTU = 4;
 
     /** Birden çok modele verilen kamera karesi; hepsi bitirince bitmap havuza döner. */
@@ -84,6 +95,11 @@ final class Algilayici {
         final FpsSayaci fps = new FpsSayaci();
         volatile BiConsumer<MPImage, Long> gonder;
         volatile Runnable kapatici;
+        /** Model yanıt vermeyince (takılınca) çağrılır. */
+        volatile Runnable takildi;
+        /** Bu kurulumdan beri en az bir sonuç verdi mi; ne zaman kuruldu. */
+        volatile boolean sonucVerdi;
+        volatile long acilis;
         /** Her kurulumda artar: kapatılmış eski modelden geç gelen sonuç yenisini bozmasın. */
         volatile int nesil;
         private volatile long gonderim;
@@ -101,6 +117,14 @@ final class Algilayici {
             return gonder != null;
         }
 
+        /** Kurulan modeli bağlar: kareler gonder'e verilir, kapatırken kapatici çalışır. */
+        void bagla(BiConsumer<MPImage, Long> gonder, Runnable kapatici) {
+            sonucVerdi = false;
+            acilis = SystemClock.uptimeMillis();
+            this.kapatici = kapatici;
+            this.gonder = gonder;
+        }
+
         /** Model boştaysa (ya da takılmışsa) kareyi almak için ayırır. */
         boolean ayir(long simdi) {
             if (!acik()) return false;
@@ -109,6 +133,8 @@ final class Algilayici {
                 nesil++;
                 kare = null;
                 mesgul.set(false);
+                Runnable t = takildi;
+                if (t != null) t.run();
             }
             if (!mesgul.get() && simdi - gonderim < enAzAralik) return false;
             if (!mesgul.compareAndSet(false, true)) return false;
@@ -121,7 +147,10 @@ final class Algilayici {
             Kare k = kare;
             kare = null;
             if (k != null) k.birak();
-            if (basarili) fps.say();
+            if (basarili) {
+                fps.say();
+                sonucVerdi = true;
+            }
             mesgul.set(false);
         }
 
@@ -131,7 +160,15 @@ final class Algilayici {
             kapatici = null;
             nesil++;
             kare = null;
-            if (k != null) k.run();
+            // Çalışırken bozulmuş bir model (ör. GPU hatası) kapatılırken de hata fırlatır;
+            // yakalanmazsa uygulama çöker.
+            if (k != null) {
+                try {
+                    k.run();
+                } catch (RuntimeException e) {
+                    Log.w(ETIKET, "Model kapatılırken hata", e);
+                }
+            }
             mesgul.set(false);
             fps.sifirla();
         }
@@ -147,11 +184,23 @@ final class Algilayici {
     private final Context baglam;
     private final Dinleyici dinleyici;
     private final ArrayDeque<Bitmap> havuz = new ArrayDeque<>();
-    private Delegate hizlandirici = Delegate.CPU;
+    private volatile Delegate hizlandirici = Delegate.CPU;
+    private final AtomicBoolean gpuBildirildi = new AtomicBoolean();
 
     Algilayici(Context baglam, Dinleyici dinleyici) {
         this.baglam = baglam;
         this.dinleyici = dinleyici;
+        for (Gorev g : new Gorev[] {yuz, el, vucut, nesne}) g.takildi = () -> gpuSorunu(g, false);
+    }
+
+    /**
+     * GPU'daki bir model hata verdi (hata) ya da takıldı: kullanıcıya bildirilir, CPU'ya dönülür.
+     * Takılma ancak model kurulduğundan beri hiç sonuç vermeden GPU_SABIR_MS geçince sayılır.
+     */
+    private void gpuSorunu(Gorev g, boolean hata) {
+        if (hizlandirici != Delegate.GPU) return;
+        if (!hata && (g.sonucVerdi || SystemClock.uptimeMillis() - g.acilis < GPU_SABIR_MS)) return;
+        if (gpuBildirildi.compareAndSet(false, true)) dinleyici.gpuCalismadi();
     }
 
     /** Yüz ve el modellerini verilen hızlandırıcıyla kurar; GPU olmazsa CPU'ya düşer. Sonuç: GPU kullanılıyor mu. */
@@ -159,6 +208,7 @@ final class Algilayici {
         yuz.kapat();
         el.kapat();
         hizlandirici = gpu ? Delegate.GPU : Delegate.CPU;
+        gpuBildirildi.set(false);
         try {
             yuzuKur();
             eliKur();
@@ -201,8 +251,7 @@ final class Algilayici {
                 .setResultListener((sonuc, girdi) -> sonucuIsle(vucut, n, () -> dinleyici.vucut(sonuc, girdi.getWidth(), girdi.getHeight())))
                 .setErrorListener(h -> hata(vucut, n, "Vücut", h))
                 .build());
-            vucut.kapatici = m::close;
-            vucut.gonder = m::detectAsync;
+            vucut.bagla(m::detectAsync, m::close);
         } catch (RuntimeException e) {
             Log.e(ETIKET, "Vücut modeli kurulamadı", e);
             dinleyici.bildir("Vücut modeli yüklenemedi.");
@@ -225,8 +274,7 @@ final class Algilayici {
                 .setResultListener((sonuc, girdi) -> sonucuIsle(nesne, n, () -> dinleyici.nesne(sonuc, girdi)))
                 .setErrorListener(h -> hata(nesne, n, "Nesne", h))
                 .build());
-            nesne.kapatici = m::close;
-            nesne.gonder = m::detectAsync;
+            nesne.bagla(m::detectAsync, m::close);
         } catch (RuntimeException e) {
             Log.e(ETIKET, "Nesne modeli kurulamadı", e);
             dinleyici.bildir("Nesne modeli yüklenemedi.");
@@ -248,8 +296,7 @@ final class Algilayici {
                 .setResultListener((sonuc, girdi) -> sonucuIsle(arkaPlan, n, () -> dinleyici.arkaPlan(sonuc, girdi)))
                 .setErrorListener(h -> hata(arkaPlan, n, "Arka plan", h))
                 .build());
-            arkaPlan.kapatici = m::close;
-            arkaPlan.gonder = m::segmentAsync;
+            arkaPlan.bagla(m::segmentAsync, m::close);
         } catch (RuntimeException e) {
             Log.e(ETIKET, "Arka plan modeli kurulamadı", e);
             dinleyici.bildir("Arka plan modeli yüklenemedi.");
@@ -337,8 +384,7 @@ final class Algilayici {
             .setResultListener((sonuc, girdi) -> sonucuIsle(yuz, n, () -> dinleyici.yuz(sonuc, girdi)))
             .setErrorListener(h -> hata(yuz, n, "Yüz", h))
             .build());
-        yuz.kapatici = m::close;
-        yuz.gonder = m::detectAsync;
+        yuz.bagla(m::detectAsync, m::close);
     }
 
     private void eliKur() {
@@ -354,8 +400,7 @@ final class Algilayici {
             .setResultListener((sonuc, girdi) -> sonucuIsle(el, n, () -> dinleyici.el(sonuc, girdi.getWidth(), girdi.getHeight())))
             .setErrorListener(h -> hata(el, n, "El", h))
             .build());
-        el.kapatici = m::close;
-        el.gonder = m::recognizeAsync;
+        el.bagla(m::recognizeAsync, m::close);
     }
 
     /** Sonucu işler; işlerken hata olsa da model serbest kalır (yoksa bir daha kare almazdı). */
@@ -374,9 +419,12 @@ final class Algilayici {
         return BaseOptions.builder().setModelAssetPath(MODELLER + model).setDelegate(d).build();
     }
 
-    private static void hata(Gorev g, int n, String ad, RuntimeException h) {
+    private void hata(Gorev g, int n, String ad, RuntimeException h) {
         Log.e(ETIKET, ad + " modeli hatası", h);
+        // Kapatılmış eski bir kurulumdan geç gelen hata yeni kurulumu etkilemesin.
+        boolean guncel = n == g.nesil;
         g.bitti(n, false);
+        if (guncel && g != arkaPlan) gpuSorunu(g, true);
     }
 
     /** Saniyedeki sonuç sayısının yumuşatılmış ortalaması. */

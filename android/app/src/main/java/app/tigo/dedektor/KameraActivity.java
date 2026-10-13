@@ -23,6 +23,7 @@ import androidx.camera.core.resolutionselector.ResolutionSelector;
 import androidx.camera.core.resolutionselector.ResolutionStrategy;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
+import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
@@ -88,7 +89,10 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
         verildi -> {
             if (verildi) kamerayiBaslat();
             else {
-                toast("Kamera izni verilmedi.");
+                // "Bir daha sorma" seçildiyse istek hiç sorulmadan reddedilir: nereden açılacağını söyle.
+                boolean kalici = !ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.CAMERA);
+                toast(kalici ? "Kamera izni kapalı. Telefonun Ayarlar › Uygulamalar › Dedektör › İzinler bölümünden açabilirsin."
+                    : "Kamera izni verilmedi.");
                 finish();
             }
         }
@@ -187,7 +191,11 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
             havadaCizim.temizle();
             kamerayiBagla();
         });
-        findViewById(R.id.ayarlar).setOnClickListener(v -> ayarPaneli.ac(!ayarPaneli.acik()));
+        findViewById(R.id.ayarlar).setOnClickListener(v -> {
+            boolean ac = !ayarPaneli.acik();
+            if (ac) yzPaneli.geri();
+            ayarPaneli.ac(ac);
+        });
         findViewById(R.id.deklansor).setOnClickListener(v -> fotograf.cek());
         // FPS hapına dokunmak CPU ile GPU arasında geçiş yapar (ayarlarda da var).
         findViewById(R.id.fps_kutusu).setOnClickListener(v -> hizlandiriciSec(!ayarlar.gpu));
@@ -345,6 +353,14 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
     public void nesne(ObjectDetectorResult sonuc, MPImage girdi) {
         if (!ayarlar.nesneGerekli()) return;
         cizim.nesneGuncelle(yz.nesne(sonuc, BitmapExtractor.extract(girdi), sonEller), girdi.getWidth(), girdi.getHeight());
+    }
+
+    @Override
+    public void gpuCalismadi() {
+        runOnUiThread(() -> {
+            toast("GPU bu telefonda çalışmadı, CPU'ya geçildi.");
+            hizlandiriciSec(false);
+        });
     }
 
     @Override

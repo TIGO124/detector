@@ -12,6 +12,8 @@ export function webKamerasiniKur() {
   const ctx = tuval.getContext('2d')!;
   const giris = document.querySelector<HTMLElement>('#giris')!;
   const baslat = document.querySelector<HTMLButtonElement>('#baslat')!;
+  // Düğmenin içinde simge de var: yalnızca yazısı değişir.
+  const baslatYazi = document.querySelector<HTMLElement>('#baslat-yazi')!;
   const mesaj = document.querySelector<HTMLElement>('#mesaj')!;
   const ust = document.querySelector<HTMLElement>('#ust')!;
   const yuzSayisi = document.querySelector<HTMLElement>('#yuz-sayisi')!;
@@ -143,7 +145,7 @@ export function webKamerasiniKur() {
     } catch (hata) {
       console.error(hata);
       mesaj.textContent = hataMesaji(hata);
-      baslat.textContent = 'Tekrar dene';
+      baslatYazi.textContent = 'Tekrar dene';
       baslat.disabled = false;
     }
   });

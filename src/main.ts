@@ -10,6 +10,9 @@ if (Capacitor.isPluginAvailable('Kamera')) {
   const baslat = document.querySelector<HTMLButtonElement>('#baslat')!;
   const mesaj = document.querySelector<HTMLElement>('#mesaj')!;
   baslat.addEventListener('click', () => {
+    // Hızlı çift dokunuş iki kamera ekranı açmasın.
+    baslat.disabled = true;
+    setTimeout(() => (baslat.disabled = false), 1500);
     Kamera.ac().catch((hata: unknown) => {
       mesaj.textContent = `Kamera açılamadı: ${hata instanceof Error ? hata.message : String(hata)}`;
     });

@@ -317,6 +317,11 @@ final class YzTanima {
         kayitTuru = tur;
     }
 
+    /** Süren kaydı hemen bitirir (Öğret yaprağı kapandı); kalan iş kayitBitir'de. */
+    void kaydiKes() {
+        kayitBitisi = SystemClock.uptimeMillis();
+    }
+
     /** Kaydı bitirir ve örnekleri dosyaya yazar; kaç örnek alındığını verir. Arka planda çağrılmalı. */
     int kayitBitir() throws IOException {
         Ayarlar.Yz tur = kayitTuru;
@@ -356,7 +361,12 @@ final class YzTanima {
 
     /** Bilgisayarda eğitilmiş modeli (JSON) yükler; girdi boyutu bu türe uymuyorsa hata verir. */
     void modeliYukle(Ayarlar.Yz tur, String json) throws IOException, JSONException {
-        SinirAgi m = SinirAgi.json(json);
+        SinirAgi m;
+        try {
+            m = SinirAgi.json(json);
+        } catch (JSONException | RuntimeException e) {
+            throw new IllegalArgumentException("Bu dosya bir Dedektör modeli değil.", e);
+        }
         int beklenen = veri(tur).boyut;
         if (m.girdiBoyutu() != beklenen || !m.siniflandirici) {
             throw new IllegalArgumentException("Bu model bu bölüm için değil (girdi " + m.girdiBoyutu() + ", beklenen " + beklenen + ").");

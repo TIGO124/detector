@@ -1,6 +1,6 @@
 {
-  "surum": "1.6.0",
+  "surum": "1.6.1",
   "notlar": [
-    "Yeni arayüz: yeni yazı tipleri, sonuç kartı, kamera uygulaması gibi mod sekmeleri, ayarlarda CPU/GPU seçimi"
+    "Hata düzeltmeleri: GPU çökmesi giderildi (çalışmazsa CPU'ya kendiliğinden geçer), simgeden dönünce kamera ekranı kapanmıyor, küçük ekranlarda ayarlar kaydırılabiliyor"
   ]
 }

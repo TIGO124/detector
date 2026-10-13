@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Yeni arayüzün renkleri (Claude Design: "Dedektör Arayüzü" › Tasarım dili). Vurgu rengi ayarlardan seçilir, kodda verilir. -->
+<resources>
+    <color name="zemin">#070B14</color>
+    <!-- Kamera görüntüsünün üstündeki yarı saydam yüzeyler -->
+    <color name="cam">#B80A0F1C</color>
+    <color name="cam_koyu">#CC0A0F1C</color>
+    <color name="cam_cizgi">#14FFFFFF</color>
+    <!-- Yapraklar (ayarlar, öğret) -->
+    <color name="yaprak">#F50F1626</color>
+    <color name="liste">#151E31</color>
+    <color name="cizgi">#1E2738</color>
+    <color name="cizgi_acik">#2A3448</color>
+    <color name="yazi">#EEF2F7</color>
+    <color name="yazi_ikincil">#DCE3EC</color>
+    <color name="yazi_cam">#C6CFDB</color>
+    <color name="soluk">#9AA6B8</color>
+    <!-- Vurgu renginin üstündeki yazı -->
+    <color name="vurgu_ustu">#04140B</color>
+    <color name="kayit">#FF4D5E</color>
+    <color name="kayit_acik">#FF8A95</color>
+</resources>

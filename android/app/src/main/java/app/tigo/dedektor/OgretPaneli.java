@@ -3,6 +3,7 @@ package app.tigo.dedektor;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.ColorStateList;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
@@ -34,6 +35,8 @@ final class OgretPaneli {
 
     private static final String ETIKET = "Dedektor";
     private static final int GERI_SAYIM = 3;
+    private static final int KAYIT = 0xFFFF4D5E;
+    private static final int KAYIT_ACIK = 0xFFFF8A95;
 
     private final AppCompatActivity etkinlik;
     private final Ayarlar ayarlar;
@@ -49,20 +52,22 @@ final class OgretPaneli {
     private final ProgressBar ilerleme;
     private final TextView listeBasligi;
     private final LinearLayout etiketler;
-    private final LinearLayout dugmeler;
-    /** Ekranın ortasındaki büyük yazı: geri sayım. */
-    private final TextView buyukYazi;
+    /** Eğit, bilgisayara gönder, model yükle (kişi ve nesnede yok). */
+    private final View egitimDugmeleri;
+    private final TextView egitDugmesi;
+    /** Kameranın üstündeki yuvarlak sayaç: geri sayım, sonra kaydın kalan saniyesi. */
+    private final TextView geriSayim;
     private final Handler ana = new Handler(Looper.getMainLooper());
     private final ExecutorService is = Executors.newSingleThreadExecutor();
     private final ActivityResultLauncher<String[]> modelSecici;
     private Ayarlar.Yz tur;
     private boolean mesgul;
 
-    OgretPaneli(AppCompatActivity etkinlik, Ayarlar ayarlar, YzTanima yz, TextView buyukYazi, Runnable degisti) {
+    OgretPaneli(AppCompatActivity etkinlik, Ayarlar ayarlar, YzTanima yz, TextView geriSayim, Runnable degisti) {
         this.etkinlik = etkinlik;
         this.ayarlar = ayarlar;
         this.yz = yz;
-        this.buyukYazi = buyukYazi;
+        this.geriSayim = geriSayim;
         this.degisti = degisti;
         panel = etkinlik.findViewById(R.id.ogret_paneli);
         baslik = etkinlik.findViewById(R.id.ogret_baslik);
@@ -73,9 +78,23 @@ final class OgretPaneli {
         ilerleme = etkinlik.findViewById(R.id.ogret_ilerleme);
         listeBasligi = etkinlik.findViewById(R.id.ogret_liste_basligi);
         etiketler = etkinlik.findViewById(R.id.ogret_etiketler);
-        dugmeler = etkinlik.findViewById(R.id.ogret_dugmeler);
-        kaydet.setOnClickListener(v -> kaydiBaslat());
+        egitimDugmeleri = etkinlik.findViewById(R.id.ogret_egitim);
+        egitDugmesi = etkinlik.findViewById(R.id.ogret_egit);
+        TextView gonder = etkinlik.findViewById(R.id.ogret_gonder);
+        TextView yukle = etkinlik.findViewById(R.id.ogret_yukle);
+        Cip.simge(gonder, R.drawable.ic_gonder, Cip.YAZI_IKINCIL, 17);
+        Cip.simge(yukle, R.drawable.ic_yukle, Cip.YAZI_IKINCIL, 17);
+        Cip.ortala(gonder);
+        Cip.ortala(yukle);
+        Cip.ortala(egitDugmesi);
         modelSecici = etkinlik.registerForActivityResult(new ActivityResultContracts.OpenDocument(), this::modelYukle);
+        kaydet.setOnClickListener(v -> kaydiBaslat());
+        egitDugmesi.setOnClickListener(v -> egit());
+        gonder.setOnClickListener(v -> disaAktar());
+        yukle.setOnClickListener(v -> {
+            if (!mesgul) modelSecici.launch(new String[] {"application/json", "application/octet-stream", "text/plain"});
+        });
+        etkinlik.findViewById(R.id.ogret_kapat).setOnClickListener(v -> kapat());
     }
 
     View panel() {
@@ -97,27 +116,27 @@ final class OgretPaneli {
         this.tur = tur;
         switch (tur) {
             case KISI:
-                yazilar("Kişi ekle", "Adı yaz ve Kaydet'e bas. Geri sayımdan sonra 3 saniye kameraya bak, başını hafifçe sağa sola çevir.",
-                    "Ad (ör. Ayşe)", "Kayıtlı kişiler (silmek için dokun)");
+                yazilar("Kişi ekle", "Geri sayımdan sonra 3 saniye kameraya bak, başını hafifçe sağa sola çevir.",
+                    "Ad (ör. Ayşe)", "KAYITLI KİŞİLER");
                 break;
             case NESNE:
-                yazilar("Nesne öğret", "Nesnenin adını yaz ve Kaydet'e bas. 3 saniye nesneyi ortadaki çerçevede farklı açılardan göster. "
-                        + "Yanlış tanırsa çerçeve boşken \"" + NesneTanima.BOS + "\" adıyla da kaydet.",
-                    "Ad (ör. Anahtarım)", "Öğretilen nesneler (silmek için dokun)");
+                yazilar("Nesne öğret", "Nesneyi 3 saniye ortadaki çerçevede farklı açılardan göster. Yanlış tanırsa çerçeve boşken \""
+                        + NesneTanima.BOS + "\" adıyla da kaydet.",
+                    "Ad (ör. Anahtarım)", "ÖĞRETİLEN NESNELER");
                 break;
             case TID:
-                yazilar("Öğret · TİD harfleri", "Harfin adını yaz (ör. A) ve Kaydet'e bas. Harfi 3 saniye işaretle; hareketli harflerde hareketi tekrarla. Her harfi 2-3 kez kaydet, sonra Eğit.",
-                    "Harf (ör. A)", "Öğrettiklerin (silmek için dokun)");
+                yazilar("TİD harfi öğret", "Harfi 3 saniye işaretle; hareketli harflerde hareketi tekrarla. Her harfi 2-3 kez kaydet, sonra Eğit'e bas.",
+                    "Harf (ör. A)", "ÖĞRETTİKLERİN");
                 break;
             default:
-                yazilar("Öğret · El hareketleri", "Hareketin adını yaz (ör. Selam) ve Kaydet'e bas. Hareketi 3 saniye farklı açılardan göster. En az iki hareket kaydet, sonra Eğit.",
-                    "Ad (ör. Selam)", "Öğrettiklerin (silmek için dokun)");
+                yazilar("El hareketi öğret", "Hareketi 3 saniye farklı açılardan göster. En az iki hareket kaydet, sonra Eğit'e bas.",
+                    "Ad (ör. Selam)", "ÖĞRETTİKLERİN");
                 break;
         }
         renkleriAyarla();
         durum.setText(null);
         ilerleme.setVisibility(View.GONE);
-        dugmeleriGoster();
+        egitimDugmeleri.setVisibility(egitimsiz() ? View.GONE : View.VISIBLE);
         etiketleriGoster();
         panel.setVisibility(View.VISIBLE);
     }
@@ -135,31 +154,41 @@ final class OgretPaneli {
     }
 
     private void renkleriAyarla() {
-        kaydet.setBackgroundTintList(ColorStateList.valueOf(ayarlar.renk));
+        kayitGorunumu(false);
+        egitDugmesi.setBackgroundTintList(ColorStateList.valueOf(ayarlar.renk));
+        Cip.simge(egitDugmesi, R.drawable.ic_parilti, Cip.VURGU_USTU, 20);
     }
 
-    private void dugmeleriGoster() {
-        dugmeler.removeAllViews();
-        if (!egitimsiz()) {
-            dugmeler.addView(cip("Eğit", true, v -> egit()));
-            dugmeler.addView(cip("Bilgisayara gönder", false, v -> disaAktar()));
-            dugmeler.addView(cip("Model yükle", false, v -> {
-                if (!mesgul) modelSecici.launch(new String[] {"application/json", "application/octet-stream", "text/plain"});
-            }));
+    /** Kaydet düğmesi: normalde vurgu renginde; kayıt sürerken kırmızı tonlu "Kaydediliyor". */
+    private void kayitGorunumu(boolean kayitta) {
+        if (kayitta) {
+            GradientDrawable nokta = new GradientDrawable();
+            nokta.setShape(GradientDrawable.OVAL);
+            nokta.setColor(KAYIT);
+            int b = Math.round(10 * etkinlik.getResources().getDisplayMetrics().density);
+            nokta.setBounds(0, 0, b, b);
+            kaydet.setCompoundDrawablesRelative(nokta, null, null, null);
+            kaydet.setText("Kaydediliyor");
+            kaydet.setTextColor(KAYIT_ACIK);
+            kaydet.setBackgroundTintList(ColorStateList.valueOf(Cip.saydam(KAYIT, 0x30)));
+        } else {
+            kaydet.setCompoundDrawablesRelative(null, null, null, null);
+            kaydet.setText("Kaydet");
+            kaydet.setTextColor(Cip.VURGU_USTU);
+            kaydet.setBackgroundTintList(ColorStateList.valueOf(ayarlar.renk));
         }
-        dugmeler.addView(cip("Kapat", false, v -> kapat()));
     }
 
     private void etiketleriGoster() {
         etiketler.removeAllViews();
         Map<String, Integer> sayilar = yz.veri(tur).sayilar();
         if (sayilar.isEmpty()) {
-            etiketler.addView(cip("Henüz yok", false, null));
+            etiketler.addView(Cip.kayit(etkinlik, "Henüz yok", -1, ayarlar.renk, null));
             return;
         }
         for (Map.Entry<String, Integer> e : sayilar.entrySet()) {
             String ad = e.getKey();
-            etiketler.addView(cip(ad + " · " + e.getValue(), false, v -> silmeyiSor(ad)));
+            etiketler.addView(Cip.kayit(etkinlik, ad, e.getValue(), ayarlar.renk, v -> silmeyiSor(ad)));
         }
     }
 
@@ -190,11 +219,14 @@ final class OgretPaneli {
         mesgul = true;
         for (int i = 0; i < GERI_SAYIM; i++) {
             String s = String.valueOf(GERI_SAYIM - i);
-            ana.postDelayed(() -> buyukYaz(s), i * 1000L);
+            ana.postDelayed(() -> sayacYaz(s, Cip.YAZI), i * 1000L);
         }
         ana.postDelayed(() -> {
-            buyukYaz("●");
             yz.kayitBaslat(tur, ad);
+            kayitGorunumu(true);
+            ilerleme.setProgressTintList(ColorStateList.valueOf(KAYIT));
+            ilerleme.setProgress(0);
+            ilerleme.setVisibility(View.VISIBLE);
             kayitIzle();
         }, GERI_SAYIM * 1000L);
         durum.setText("Hazırlan…");
@@ -202,11 +234,15 @@ final class OgretPaneli {
 
     private void kayitIzle() {
         if (yz.kayitta(tur)) {
-            durum.setText("Kaydediliyor… " + yz.kayitSayisi() + " örnek");
-            ana.postDelayed(this::kayitIzle, 200);
+            long kalan = yz.kayitKalanMs();
+            sayacYaz(String.valueOf((kalan + 999) / 1000), KAYIT_ACIK);
+            ilerleme.setProgress(Math.round(100 - 100f * kalan / YzTanima.KAYIT_MS));
+            durum.setText(yz.kayitSayisi() + " örnek alındı");
+            ana.postDelayed(this::kayitIzle, 100);
             return;
         }
-        buyukYazi.setVisibility(View.GONE);
+        geriSayim.setVisibility(View.GONE);
+        kayitGorunumu(false);
         is.execute(() -> {
             String sonuc;
             try {
@@ -222,9 +258,10 @@ final class OgretPaneli {
         });
     }
 
-    private void buyukYaz(String s) {
-        buyukYazi.setText(s);
-        buyukYazi.setVisibility(View.VISIBLE);
+    private void sayacYaz(String s, int renk) {
+        geriSayim.setText(s);
+        geriSayim.setTextColor(renk);
+        geriSayim.setVisibility(View.VISIBLE);
     }
 
     // ---------- Eğitim, dışa ve içe aktarma ----------
@@ -232,6 +269,7 @@ final class OgretPaneli {
     private void egit() {
         if (mesgul) return;
         mesgul = true;
+        ilerleme.setProgressTintList(ColorStateList.valueOf(ayarlar.renk));
         ilerleme.setProgress(0);
         ilerleme.setVisibility(View.VISIBLE);
         durum.setText("Eğitiliyor…");
@@ -310,10 +348,6 @@ final class OgretPaneli {
         durum.setText(sonuc);
         etiketleriGoster();
         degisti.run();
-    }
-
-    private TextView cip(String metin, boolean secili, View.OnClickListener tik) {
-        return Cip.olustur(etkinlik, metin, secili, ayarlar.renk, tik);
     }
 
     private void klavyeyiKapat() {

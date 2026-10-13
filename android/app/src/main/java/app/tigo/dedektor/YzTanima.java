@@ -69,6 +69,8 @@ final class YzTanima {
     private float[] duyguOrtalamasi;
     private final ArrayDeque<String> kisiGecmisi = new ArrayDeque<>();
     private volatile String kisiEtiketi;
+    private volatile String hareketYazisi;
+    private volatile String duyguYazisi;
     private volatile long sonKisi;
     private volatile boolean vucutGorunuyor;
     private final ArrayDeque<String> nesneGecmisi = new ArrayDeque<>();
@@ -114,6 +116,23 @@ final class YzTanima {
             el.yzEtiketi = cogunluk(g);
         }
         if (eller.isEmpty()) elGecmisi.clear();
+        String ilk = null;
+        for (ElTakibi.ElDurumu el : eller) if (ilk == null) ilk = el.yzEtiketi;
+        hareketYazisi = ilk;
+    }
+
+    /** Sonuç kartı için: ilk elde tanınan hareket, duygu, kişi (yoksa null). */
+    String hareketYazisi() {
+        return hareketYazisi;
+    }
+
+    String duyguYazisi() {
+        return duyguYazisi;
+    }
+
+    String kisiYazisi() {
+        if (kayitta(Ayarlar.Yz.KISI)) return "Kaydediliyor: " + kayitEtiketi;
+        return kisiEtiketi;
     }
 
     private void tid(List<ElTakibi.ElDurumu> eller, long zaman) {
@@ -147,6 +166,7 @@ final class YzTanima {
                 kisiGecmisi.clear();
             }
             kisiEtiketi = null;
+            duyguYazisi = null;
             return null;
         }
         if (tur == Ayarlar.Yz.DUYGU) return duygu(puanlar);
@@ -160,7 +180,8 @@ final class YzTanima {
         if (duyguOrtalamasi == null) duyguOrtalamasi = p;
         else for (int i = 0; i < p.length; i++) duyguOrtalamasi[i] = duyguOrtalamasi[i] * 0.7f + p[i] * 0.3f;
         int i = SinirAgi.enBuyukIndeks(duyguOrtalamasi);
-        return duyguModeli.etiketler[i] + " %" + Math.round(100 * duyguOrtalamasi[i]);
+        duyguYazisi = duyguModeli.etiketler[i] + " %" + Math.round(100 * duyguOrtalamasi[i]);
+        return duyguYazisi;
     }
 
     private String kisi(List<NormalizedLandmark> noktalar, Bitmap resim) {
@@ -310,6 +331,10 @@ final class YzTanima {
 
     int kayitSayisi() {
         return kayitSayisi.get();
+    }
+
+    long kayitKalanMs() {
+        return Math.max(0, kayitBitisi - SystemClock.uptimeMillis());
     }
 
     private void ornekEkle(YzVeri v, float[] x) {

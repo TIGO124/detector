@@ -9,6 +9,7 @@ import android.graphics.Path;
 import android.graphics.RectF;
 import android.text.TextUtils;
 import android.util.AttributeSet;
+import android.util.TypedValue;
 import android.view.View;
 import com.google.mediapipe.tasks.components.containers.Connection;
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark;
@@ -29,7 +30,8 @@ import java.util.List;
  */
 public class CizimView extends View {
 
-    private static final int KOYU = 0xFF0B1120;
+    /** Vurgu renginin üstündeki yazı (Tasarım dili: "vurgu üstü"). */
+    private static final int KOYU = 0xFF04140B;
 
     private static final int[] AG = diziyeCevir(FaceLandmarker.FACE_LANDMARKS_TESSELATION);
     private static final int[] YUZ_HATLARI = diziyeCevir(
@@ -105,10 +107,10 @@ public class CizimView extends View {
         nesneKalemi.setStrokeJoin(Paint.Join.ROUND);
         cerceveKalemi.setStrokeWidth(2f * dp);
         cerceveKalemi.setColor(0xB3FFFFFF);
-        cerceveKalemi.setPathEffect(new DashPathEffect(new float[] {10f * dp, 8f * dp}, 0));
+        cerceveKalemi.setPathEffect(new DashPathEffect(new float[] {12f * dp, 9f * dp}, 0));
         etiketYazisi.setColor(KOYU);
-        etiketYazisi.setTextSize(15f * dp);
-        etiketYazisi.setFakeBoldText(true);
+        etiketYazisi.setTextSize(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 13f, getResources().getDisplayMetrics()));
+        etiketYazisi.setTypeface(Cip.font(context, R.font.manrope_cok_kalin));
     }
 
     void baglan(Ayarlar ayarlar, HavadaCizim havadaCizim) {
@@ -303,21 +305,21 @@ public class CizimView extends View {
     /** Ortadaki çerçeve (öğretilen nesneler burada tanınır) ve algılanan nesnelerin kutuları. */
     private void nesneleriCiz(Canvas tuval, List<NesneTanima.Nesne> liste) {
         float[] c = NesneTanima.cerceve(resimGenisligi, resimYuksekligi);
-        kutuCiz(tuval, c, cerceveKalemi);
+        kutuCiz(tuval, c, cerceveKalemi, 22f);
         for (NesneTanima.Nesne n : liste) {
-            nesneKalemi.setStrokeWidth((n.elde ? 4f : 2f) * dp);
-            kutuCiz(tuval, n.kutu, nesneKalemi);
-            String metin = (n.elde ? "Elinde: " : "") + n.ad + " %" + Math.round(100 * n.puan);
+            nesneKalemi.setStrokeWidth((n.elde ? 3.5f : 2f) * dp);
+            kutuCiz(tuval, n.kutu, nesneKalemi, 14f);
+            String metin = (n.elde ? "Elinde · " : "") + n.ad + " %" + Math.round(100 * n.puan);
             etiketCiz(tuval, metin, (x(n.kutu[0]) + x(n.kutu[2])) / 2, y(n.kutu[1]) - 4f * dp, true);
         }
     }
 
     /** Normalize kutu {sol, üst, sağ, alt}; ön kamerada aynalı olduğundan kenarlar sıralanır. */
-    private void kutuCiz(Canvas tuval, float[] k, Paint kalem) {
+    private void kutuCiz(Canvas tuval, float[] k, Paint kalem, float koseDp) {
         float a = x(k[0]);
         float b = x(k[2]);
         kutu.set(Math.min(a, b), y(k[1]), Math.max(a, b), y(k[3]));
-        tuval.drawRoundRect(kutu, 10f * dp, 10f * dp, kalem);
+        tuval.drawRoundRect(kutu, koseDp * dp, koseDp * dp, kalem);
     }
 
     private void elleriCiz(Canvas tuval, List<ElTakibi.ElDurumu> eller, boolean etiket, boolean yz) {
@@ -365,14 +367,14 @@ public class CizimView extends View {
 
     /** Etiketi noktanın üstüne (ya da altına) ortalar; ekran dışına taşmaz. */
     private void etiketCiz(Canvas tuval, String metin, float merkezX, float kenarY, boolean ustune) {
-        float pay = 8f * dp;
+        float pay = 11f * dp;
         float genislik = etiketYazisi.measureText(metin) + 2 * pay;
-        float yukseklik = etiketYazisi.getTextSize() + 1.5f * pay;
+        float yukseklik = etiketYazisi.getTextSize() + 10f * dp;
         float ust = ustune ? kenarY - yukseklik : kenarY;
         float sol = Math.max(0, Math.min(merkezX - genislik / 2, getWidth() - genislik));
         ust = Math.max(0, Math.min(ust, getHeight() - yukseklik));
         kutu.set(sol, ust, sol + genislik, ust + yukseklik);
-        tuval.drawRoundRect(kutu, yukseklik / 3, yukseklik / 3, etiketZemini);
+        tuval.drawRoundRect(kutu, yukseklik / 2, yukseklik / 2, etiketZemini);
         Paint.FontMetrics m = etiketYazisi.getFontMetrics();
         tuval.drawText(metin, sol + pay, kutu.centerY() - (m.ascent + m.descent) / 2, etiketYazisi);
     }

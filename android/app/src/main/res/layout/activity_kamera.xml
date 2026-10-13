@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Kamera ekranı. Tasarım: Claude Design, "Dedektör Arayüzü" (Kamera, YZ, Ayarlar, Öğret). -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/kok"
@@ -25,59 +26,147 @@
         android:alpha="0"
         android:background="@android:color/white" />
 
+    <!-- Alttaki düğmeler kamera görüntüsünün üstünde okunur kalsın -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="320dp"
+        android:layout_gravity="bottom"
+        android:background="@drawable/alt_karartma" />
+
+    <!-- Üst: geri, yüz/el sayaçları, FPS; altında ipucu -->
     <LinearLayout
         android:id="@+id/ust"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="top"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
+        android:orientation="vertical"
         android:paddingStart="16dp"
         android:paddingTop="12dp"
         android:paddingEnd="16dp">
 
-        <ImageButton
-            android:id="@+id/geri"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_marginEnd="8dp"
-            android:background="@drawable/yuvarlak_zemin"
-            android:contentDescription="Geri"
-            android:src="@drawable/ic_geri" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
-        <TextView android:id="@+id/yuz_sayisi" style="@style/Hap" />
+            <ImageButton
+                android:id="@+id/geri"
+                style="@style/CamDaire"
+                android:contentDescription="Geri"
+                android:src="@drawable/ic_geri" />
+
+            <LinearLayout
+                style="@style/CamHap"
+                android:layout_marginStart="8dp"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:contentDescription="Yüz"
+                    android:src="@drawable/ic_yuz"
+                    app:tint="@color/yazi_cam" />
+
+                <TextView
+                    android:id="@+id/yuz_sayisi"
+                    style="@style/Sayi"
+                    android:layout_marginStart="7dp"
+                    android:text="0" />
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="18dp"
+                    android:layout_marginStart="12dp"
+                    android:layout_marginEnd="12dp"
+                    android:background="#24FFFFFF" />
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:contentDescription="El"
+                    android:src="@drawable/ic_el"
+                    app:tint="@color/yazi_cam" />
+
+                <TextView
+                    android:id="@+id/el_sayisi"
+                    style="@style/Sayi"
+                    android:layout_marginStart="7dp"
+                    android:text="0" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <!-- Dokununca CPU ile GPU arasında geçer -->
+            <LinearLayout
+                android:id="@+id/fps_kutusu"
+                style="@style/CamHap"
+                android:clickable="true"
+                android:contentDescription="CPU ya da GPU"
+                android:focusable="true"
+                android:orientation="horizontal"
+                android:paddingEnd="10dp">
+
+                <TextView
+                    android:id="@+id/fps"
+                    style="@style/Sayi"
+                    android:textColor="@color/yazi_cam"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/hizlandirici"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/etiket_cerceve"
+                    android:fontFamily="@font/manrope_cok_kalin"
+                    android:letterSpacing="0.06"
+                    android:paddingStart="6dp"
+                    android:paddingTop="2dp"
+                    android:paddingEnd="6dp"
+                    android:paddingBottom="2dp"
+                    android:textColor="@color/yazi_cam"
+                    android:textSize="11sp" />
+            </LinearLayout>
+        </LinearLayout>
 
         <TextView
-            android:id="@+id/el_sayisi"
-            style="@style/Hap"
-            android:layout_marginStart="8dp" />
-
-        <View
-            android:layout_width="0dp"
-            android:layout_height="0dp"
-            android:layout_weight="1" />
-
-        <TextView android:id="@+id/fps" style="@style/Hap" />
+            android:id="@+id/ipucu"
+            style="@style/Ipucu"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="12dp"
+            android:visibility="gone" />
     </LinearLayout>
 
-    <TextView
-        android:id="@+id/ipucu"
-        style="@style/Hap"
-        android:layout_gravity="top|center_horizontal"
-        android:layout_marginTop="64dp"
-        android:visibility="gone" />
-
+    <!-- Taş-kağıt-makas: geri sayım ve sonuç -->
     <TextView
         android:id="@+id/oyun_yazisi"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
+        android:fontFamily="@font/space_grotesk_kalin"
         android:gravity="center"
         android:shadowColor="#CC000000"
-        android:shadowRadius="12"
+        android:shadowRadius="14"
         android:textColor="#FFFFFF"
-        android:textSize="34sp"
-        android:textStyle="bold"
+        android:textSize="36sp"
+        android:visibility="gone" />
+
+    <!-- Öğret: kayıttan önce geri sayım -->
+    <TextView
+        android:id="@+id/geri_sayim"
+        android:layout_width="100dp"
+        android:layout_height="100dp"
+        android:layout_gravity="top|center_horizontal"
+        android:layout_marginTop="150dp"
+        android:background="@drawable/cam_daire"
+        android:fontFamily="@font/space_grotesk_kalin"
+        android:gravity="center"
+        android:textColor="@color/yazi"
+        android:textSize="40sp"
         android:visibility="gone" />
 
     <LinearLayout
@@ -89,47 +178,78 @@
         android:orientation="vertical"
         android:paddingBottom="20dp">
 
-        <!-- Yapay zekâ modu: büyük yazı (TİD metni, egzersiz sayacı) ve o bölümün düğmeleri -->
+        <!-- Yapay zekâ modu: sonuç kartı (etiket, büyük yazı, işlemler; egzersizde tür seçimi) -->
         <LinearLayout
             android:id="@+id/yz_paneli"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"
             android:layout_marginBottom="12dp"
-            android:gravity="center_horizontal"
+            android:background="@drawable/cam_kart"
             android:orientation="vertical"
+            android:paddingStart="20dp"
+            android:paddingTop="14dp"
+            android:paddingEnd="14dp"
+            android:paddingBottom="14dp"
             android:visibility="gone">
 
-            <TextView
-                android:id="@+id/yz_buyuk"
-                style="@style/Hap"
-                android:layout_marginStart="16dp"
-                android:layout_marginEnd="16dp"
-                android:layout_marginBottom="10dp"
-                android:paddingStart="18dp"
-                android:paddingEnd="18dp"
-                android:textColor="#FFFFFF"
-                android:textSize="26sp"
-                android:textStyle="bold"
-                android:visibility="gone" />
-
-            <HorizontalScrollView
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:scrollbars="none">
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/yz_etiket"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="@font/manrope_cok_kalin"
+                        android:letterSpacing="0.1"
+                        android:textColor="@color/soluk"
+                        android:textSize="11sp" />
+
+                    <TextView
+                        android:id="@+id/yz_buyuk"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="@font/space_grotesk_kalin"
+                        android:textColor="@color/yazi"
+                        android:textSize="30sp" />
+                </LinearLayout>
 
                 <LinearLayout
                     android:id="@+id/yz_islemler"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:gravity="center_vertical"
                     android:orientation="horizontal" />
-            </HorizontalScrollView>
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/yz_secim"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="horizontal"
+                android:visibility="gone" />
         </LinearLayout>
 
         <HorizontalScrollView
             android:id="@+id/mod_paneli_kaydirma"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp"
+            android:layout_marginBottom="10dp"
+            android:fadingEdgeLength="24dp"
+            android:fillViewport="true"
+            android:requiresFadingEdge="horizontal"
             android:scrollbars="none">
 
             <LinearLayout
@@ -137,13 +257,15 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:gravity="center"
-                android:orientation="horizontal" />
+                android:orientation="horizontal"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp" />
         </HorizontalScrollView>
 
         <HorizontalScrollView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
+            android:layout_marginBottom="12dp"
             android:scrollbars="none">
 
             <LinearLayout
@@ -162,9 +284,9 @@
 
             <ImageButton
                 android:id="@+id/ayarlar"
+                style="@style/CamDaire"
                 android:layout_width="52dp"
                 android:layout_height="52dp"
-                android:background="@drawable/yuvarlak_zemin"
                 android:contentDescription="Ayarlar"
                 android:src="@drawable/ic_ayarlar" />
 
@@ -172,121 +294,43 @@
                 android:id="@+id/deklansor"
                 android:layout_width="76dp"
                 android:layout_height="76dp"
-                android:layout_marginStart="40dp"
-                android:layout_marginEnd="40dp"
+                android:layout_marginStart="44dp"
+                android:layout_marginEnd="44dp"
                 android:background="@drawable/deklansor"
                 android:contentDescription="Fotoğraf çek" />
 
             <ImageButton
                 android:id="@+id/cevir"
+                style="@style/CamDaire"
                 android:layout_width="52dp"
                 android:layout_height="52dp"
-                android:background="@drawable/yuvarlak_zemin"
                 android:contentDescription="Kamerayı çevir"
                 android:src="@drawable/ic_kamera_cevir" />
         </LinearLayout>
     </LinearLayout>
 
+    <!-- Ayarlar yaprağı -->
     <LinearLayout
         android:id="@+id/ayar_paneli"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
-        android:background="@drawable/panel_zemin"
+        android:background="@drawable/yaprak_zemin"
         android:clickable="true"
         android:focusable="true"
         android:orientation="vertical"
         android:paddingStart="20dp"
-        android:paddingTop="20dp"
+        android:paddingTop="10dp"
         android:paddingEnd="20dp"
-        android:paddingBottom="20dp"
+        android:paddingBottom="24dp"
         android:visibility="gone">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Ayarlar"
-            android:textColor="#E2E8F0"
-            android:textSize="20sp"
-            android:textStyle="bold" />
-
-        <TextView
-            style="@style/AyarBasligi"
-            android:text="Çizgi rengi" />
-
-        <LinearLayout
-            android:id="@+id/renkler"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal" />
-
-        <androidx.appcompat.widget.SwitchCompat
-            android:id="@+id/ayar_yuz_agi"
-            style="@style/AyarAnahtari"
-            android:text="Yüz ağı" />
-
-        <androidx.appcompat.widget.SwitchCompat
-            android:id="@+id/ayar_etiketler"
-            style="@style/AyarAnahtari"
-            android:text="Etiketler (hareket, parmak, ifade)" />
-
-        <androidx.appcompat.widget.SwitchCompat
-            android:id="@+id/ayar_vucut"
-            style="@style/AyarAnahtari"
-            android:text="Vücut iskeleti" />
-
-        <TextView
-            style="@style/AyarBasligi"
-            android:text="Arka plan" />
-
-        <LinearLayout
-            android:id="@+id/arka_planlar"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal" />
-
-        <TextView
-            android:id="@+id/ayar_tamam"
-            android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:layout_marginTop="20dp"
-            android:background="@drawable/hap_zemin"
-            android:backgroundTint="#00E676"
-            android:gravity="center"
-            android:text="Tamam"
-            android:textColor="#0B1120"
-            android:textSize="16sp"
-            android:textStyle="bold" />
-    </LinearLayout>
-
-    <!-- Öğret: kendi hareketlerin, TİD harfleri, kişiler -->
-    <LinearLayout
-        android:id="@+id/ogret_paneli"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        android:background="@drawable/panel_zemin"
-        android:clickable="true"
-        android:focusable="true"
-        android:orientation="vertical"
-        android:paddingStart="20dp"
-        android:paddingTop="20dp"
-        android:paddingEnd="20dp"
-        android:paddingBottom="20dp"
-        android:visibility="gone">
-
-        <TextView
-            android:id="@+id/ogret_baslik"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="#E2E8F0"
-            android:textSize="20sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/ogret_aciklama"
-            style="@style/AyarBasligi"
-            android:layout_marginTop="6dp" />
+        <View
+            android:layout_width="40dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="12dp"
+            android:background="@drawable/tutamak" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -294,59 +338,283 @@
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
+            <TextView
+                style="@style/YaprakBasligi"
+                android:text="Ayarlar" />
+
+            <ImageButton
+                android:id="@+id/ayar_kapat"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="@drawable/liste_daire"
+                android:contentDescription="Kapat"
+                android:src="@drawable/ic_kapat"
+                app:tint="@color/yazi_ikincil" />
+        </LinearLayout>
+
+        <TextView
+            style="@style/BolumEtiketi"
+            android:text="ÇİZGİ RENGİ" />
+
+        <LinearLayout
+            android:id="@+id/renkler"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingStart="4dp" />
+
+        <TextView
+            style="@style/BolumEtiketi"
+            android:text="GÖSTERİM" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/liste_zemin"
+            android:divider="@drawable/ayrac"
+            android:orientation="vertical"
+            android:showDividers="middle">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:minHeight="64dp"
+                android:orientation="horizontal"
+                android:paddingStart="16dp"
+                android:paddingEnd="12dp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        style="@style/SatirBasligi"
+                        android:text="Yüz ağı" />
+
+                    <TextView
+                        style="@style/SatirAciklama"
+                        android:text="Yüzün üstünde ince çizgiler" />
+                </LinearLayout>
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/ayar_yuz_agi"
+                    style="@style/Anahtar"
+                    android:contentDescription="Yüz ağı" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:minHeight="64dp"
+                android:orientation="horizontal"
+                android:paddingStart="16dp"
+                android:paddingEnd="12dp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        style="@style/SatirBasligi"
+                        android:text="Etiketler" />
+
+                    <TextView
+                        style="@style/SatirAciklama"
+                        android:text="Hareket, parmak sayısı ve ifade yazıları" />
+                </LinearLayout>
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/ayar_etiketler"
+                    style="@style/Anahtar"
+                    android:contentDescription="Etiketler" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:minHeight="64dp"
+                android:orientation="horizontal"
+                android:paddingStart="16dp"
+                android:paddingEnd="12dp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        style="@style/SatirBasligi"
+                        android:text="Vücut iskeleti" />
+
+                    <TextView
+                        style="@style/SatirAciklama"
+                        android:text="Omuzdan ayağa eklemler" />
+                </LinearLayout>
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/ayar_vucut"
+                    style="@style/Anahtar"
+                    android:contentDescription="Vücut iskeleti" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <TextView
+            style="@style/BolumEtiketi"
+            android:text="ARKA PLAN" />
+
+        <LinearLayout
+            android:id="@+id/arka_planlar"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:background="@drawable/parca_zemin"
+            android:orientation="horizontal"
+            android:padding="3dp" />
+
+        <TextView
+            style="@style/BolumEtiketi"
+            android:text="HIZLANDIRICI" />
+
+        <LinearLayout
+            android:id="@+id/hizlandiricilar"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:background="@drawable/parca_zemin"
+            android:orientation="horizontal"
+            android:padding="3dp" />
+
+        <TextView
+            style="@style/SatirAciklama"
+            android:layout_marginTop="8dp"
+            android:paddingStart="4dp"
+            android:text="Bazı telefonlarda GPU daha akıcı çalışır." />
+
+        <TextView
+            android:id="@+id/ayar_tamam"
+            style="@style/AnaDugme"
+            android:layout_marginTop="20dp"
+            android:text="Tamam" />
+    </LinearLayout>
+
+    <!-- Öğret yaprağı: kendi hareketlerin, TİD harfleri, kişiler, nesneler -->
+    <LinearLayout
+        android:id="@+id/ogret_paneli"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:background="@drawable/yaprak_zemin"
+        android:clickable="true"
+        android:focusable="true"
+        android:orientation="vertical"
+        android:paddingStart="20dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="24dp"
+        android:visibility="gone">
+
+        <View
+            android:layout_width="40dp"
+            android:layout_height="5dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="12dp"
+            android:background="@drawable/tutamak" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/ogret_baslik"
+                style="@style/YaprakBasligi" />
+
+            <ImageButton
+                android:id="@+id/ogret_kapat"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="@drawable/liste_daire"
+                android:contentDescription="Kapat"
+                android:src="@drawable/ic_kapat"
+                app:tint="@color/yazi_ikincil" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/ogret_aciklama"
+            style="@style/SatirAciklama"
+            android:layout_marginTop="4dp"
+            android:lineSpacingMultiplier="1.15" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
             <EditText
                 android:id="@+id/ogret_etiket"
                 android:layout_width="0dp"
-                android:layout_height="48dp"
-                android:layout_marginEnd="12dp"
+                android:layout_height="52dp"
+                android:layout_marginEnd="10dp"
                 android:layout_weight="1"
-                android:background="@drawable/hap_zemin"
+                android:background="@drawable/giris_zemin"
+                android:fontFamily="@font/manrope_kalin"
                 android:imeOptions="actionDone"
                 android:importantForAutofill="no"
                 android:inputType="textCapSentences"
                 android:maxLength="24"
-                android:paddingStart="16dp"
-                android:paddingEnd="16dp"
+                android:paddingStart="18dp"
+                android:paddingEnd="18dp"
                 android:singleLine="true"
-                android:textColor="#FFFFFF"
-                android:textColorHint="#64748B"
+                android:textColor="@color/yazi"
+                android:textColorHint="#6B778C"
                 android:textSize="16sp" />
 
             <TextView
                 android:id="@+id/ogret_kaydet"
                 android:layout_width="wrap_content"
-                android:layout_height="48dp"
-                android:background="@drawable/hap_zemin"
-                android:backgroundTint="#00E676"
+                android:layout_height="52dp"
+                android:background="@drawable/dolu_hap"
+                android:drawablePadding="8dp"
+                android:fontFamily="@font/manrope_cok_kalin"
                 android:gravity="center"
                 android:paddingStart="20dp"
                 android:paddingEnd="20dp"
                 android:text="Kaydet"
-                android:textColor="#0B1120"
-                android:textSize="16sp"
-                android:textStyle="bold" />
+                android:textColor="@color/vurgu_ustu"
+                android:textSize="15sp" />
         </LinearLayout>
 
         <TextView
             android:id="@+id/ogret_durum"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:textColor="#E2E8F0"
-            android:textSize="15sp" />
+            android:layout_marginTop="12dp"
+            android:fontFamily="@font/manrope_kalin"
+            android:textColor="@color/yazi_ikincil"
+            android:textSize="13sp" />
 
         <ProgressBar
             android:id="@+id/ogret_ilerleme"
             style="?android:attr/progressBarStyleHorizontal"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
+            android:layout_height="4dp"
+            android:layout_marginTop="8dp"
             android:max="100"
+            android:progressDrawable="@drawable/ilerleme"
             android:visibility="gone" />
 
         <TextView
             android:id="@+id/ogret_liste_basligi"
-            style="@style/AyarBasligi" />
+            style="@style/BolumEtiketi" />
 
         <HorizontalScrollView
             android:layout_width="match_parent"
@@ -360,17 +628,38 @@
                 android:orientation="horizontal" />
         </HorizontalScrollView>
 
-        <HorizontalScrollView
+        <LinearLayout
+            android:id="@+id/ogret_egitim"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:scrollbars="none">
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/ogret_egit"
+                style="@style/AnaDugme"
+                android:layout_marginTop="20dp"
+                android:text="Eğit" />
 
             <LinearLayout
-                android:id="@+id/ogret_dugmeler"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal" />
-        </HorizontalScrollView>
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/ogret_gonder"
+                    style="@style/IkincilDugme"
+                    android:layout_marginEnd="5dp"
+                    android:text="Bilgisayara gönder"
+                    app:drawableStartCompat="@drawable/ic_gonder" />
+
+                <TextView
+                    android:id="@+id/ogret_yukle"
+                    style="@style/IkincilDugme"
+                    android:layout_marginStart="5dp"
+                    android:text="Model yükle"
+                    app:drawableStartCompat="@drawable/ic_yukle" />
+            </LinearLayout>
+        </LinearLayout>
     </LinearLayout>
 </FrameLayout>

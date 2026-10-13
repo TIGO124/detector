@@ -3,8 +3,6 @@ package app.tigo.dedektor;
 import android.Manifest;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
-import android.graphics.Canvas;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.util.Log;
@@ -61,12 +59,13 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
     private TextView yuzSayisi;
     private TextView elSayisi;
     private TextView fpsYazisi;
+    private TextView hizlandiriciYazisi;
     private TextView ipucu;
     private LinearLayout modlar;
     private LinearLayout modPaneli;
     private AyarPaneli ayarPaneli;
     private YzPaneli yzPaneli;
-    private View flas;
+    private Fotograf fotograf;
 
     private Ayarlar ayarlar;
     private Algilayici algilayici;
@@ -83,7 +82,6 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
     private volatile int sonElSayisi;
     private volatile long sonDurumYazimi;
     private volatile List<ElTakibi.ElDurumu> sonEller = Collections.emptyList();
-    private Bitmap kaydedilecek;
 
     private final ActivityResultLauncher<String> kameraIzni = registerForActivityResult(
         new ActivityResultContracts.RequestPermission(),
@@ -93,17 +91,6 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
                 toast("Kamera izni verilmedi.");
                 finish();
             }
-        }
-    );
-
-    /** Android 9 ve öncesinde galeriye kaydetmek için izin gerekir. */
-    private final ActivityResultLauncher<String> depoIzni = registerForActivityResult(
-        new ActivityResultContracts.RequestPermission(),
-        verildi -> {
-            Bitmap foto = kaydedilecek;
-            kaydedilecek = null;
-            if (verildi && foto != null) arkadaKaydet(foto);
-            else toast("Fotoğraf kaydetme izni verilmedi.");
         }
     );
 
@@ -119,22 +106,22 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
         yuzSayisi = findViewById(R.id.yuz_sayisi);
         elSayisi = findViewById(R.id.el_sayisi);
         fpsYazisi = findViewById(R.id.fps);
+        hizlandiriciYazisi = findViewById(R.id.hizlandirici);
         ipucu = findViewById(R.id.ipucu);
         modlar = findViewById(R.id.modlar);
         modPaneli = findViewById(R.id.mod_paneli);
-        flas = findViewById(R.id.flas);
+        fotograf = new Fotograf(this, onizleme, cizim, findViewById(R.id.flas));
 
         ayarlar = new Ayarlar(getSharedPreferences("kamera", MODE_PRIVATE));
         cizim.baglan(ayarlar, havadaCizim);
-        TextView ortaYazi = findViewById(R.id.oyun_yazisi);
-        oyun = new OyunAkisi(ortaYazi, this::oyuncuSecimi);
+        oyun = new OyunAkisi(findViewById(R.id.oyun_yazisi), this::oyuncuSecimi);
         algilayici = new Algilayici(this, this);
         yz = new YzTanima(this);
-        yzPaneli = new YzPaneli(this, ayarlar, yz, ortaYazi, this::modlariGoster);
+        yzPaneli = new YzPaneli(this, ayarlar, yz, findViewById(R.id.geri_sayim), this::modlariGoster);
         ayarPaneli = new AyarPaneli(this, ayarlar, cizim, () -> {
             modlariGoster();
             durumuYaz();
-        }, this::modelleriAyarla, acik -> analiz.execute(() -> algilayici.arkaPlanAyarla(acik)));
+        }, this::modelleriAyarla, acik -> analiz.execute(() -> algilayici.arkaPlanAyarla(acik)), this::hizlandiriciSec);
 
         kenarBosluklariniAyarla();
         dugmeleriBagla();
@@ -201,13 +188,21 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
             kamerayiBagla();
         });
         findViewById(R.id.ayarlar).setOnClickListener(v -> ayarPaneli.ac(!ayarPaneli.acik()));
-        findViewById(R.id.deklansor).setOnClickListener(v -> fotografCek());
-        // FPS yazısına dokunmak CPU ile GPU arasında geçiş yapar; bazı telefonlarda GPU daha hızlıdır.
-        fpsYazisi.setOnClickListener(v -> analiz.execute(() -> {
-            ayarlar.gpu = algilayici.temelModelleriKur(!ayarlar.gpu);
+        findViewById(R.id.deklansor).setOnClickListener(v -> fotograf.cek());
+        // FPS hapına dokunmak CPU ile GPU arasında geçiş yapar (ayarlarda da var).
+        findViewById(R.id.fps_kutusu).setOnClickListener(v -> hizlandiriciSec(!ayarlar.gpu));
+    }
+
+    /** Modelleri CPU ya da GPU ile yeniden kurar; GPU olmazsa CPU'ya düşer. */
+    private void hizlandiriciSec(boolean gpu) {
+        analiz.execute(() -> {
+            ayarlar.gpu = algilayici.temelModelleriKur(gpu);
             ayarlar.kaydet();
-            runOnUiThread(this::durumuYaz);
-        }));
+            runOnUiThread(() -> {
+                durumuYaz();
+                ayarPaneli.hizlandiriciyiGoster();
+            });
+        });
     }
 
     // ---------- Modlar ----------
@@ -217,7 +212,7 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
         Ayarlar.Mod[] tum = Ayarlar.Mod.values();
         for (int i = 0; i < tum.length; i++) {
             Ayarlar.Mod m = tum[i];
-            modlar.addView(cip(MOD_ADLARI[i], ayarlar.mod == m, v -> modSec(m)));
+            modlar.addView(Cip.sekme(this, MOD_ADLARI[i], ayarlar.mod == m, ayarlar.renk, v -> modSec(m)));
         }
         modPaneliniGoster();
         String metin = null;
@@ -225,6 +220,7 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
         else if (ayarlar.mod == Ayarlar.Mod.OYUN) metin = "Oyna'ya bas, \"Göster!\" deyince elini göster";
         else if (ayarlar.mod == Ayarlar.Mod.YZ) metin = yzPaneli.ipucu();
         ipucu.setText(metin);
+        Cip.simge(ipucu, R.drawable.ic_bilgi, ayarlar.renk, 16);
         ipucu.setVisibility(metin == null ? View.GONE : View.VISIBLE);
         yzPaneli.goster(ayarlar.mod == Ayarlar.Mod.YZ);
         modelleriAyarla();
@@ -254,7 +250,7 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
         modPaneli.removeAllViews();
         switch (ayarlar.mod) {
             case CIZIM:
-                modPaneli.addView(cip("Temizle", false, v -> {
+                modPaneli.addView(Cip.olustur(this, "Temizle", R.drawable.ic_silgi, false, ayarlar.renk, v -> {
                     havadaCizim.temizle();
                     cizim.invalidate();
                 }));
@@ -275,7 +271,7 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
                 TextView skor = cip("", false, null);
                 oyun.skorBagla(skor);
                 modPaneli.addView(skor);
-                modPaneli.addView(cip("Oyna", true, v -> oyun.oyna()));
+                modPaneli.addView(Cip.olustur(this, "Oyna", R.drawable.ic_oyna, true, ayarlar.renk, v -> oyun.oyna()));
                 break;
             case YZ:
                 yzPaneli.altModlar(modPaneli);
@@ -423,50 +419,16 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
         }
     }
 
-    // ---------- Fotoğraf ----------
-
-    /** Önizleme ile çizimleri birleştirip galeriye kaydeder. */
-    private void fotografCek() {
-        Bitmap goruntu = onizleme.getBitmap();
-        if (goruntu == null || cizim.getWidth() == 0) {
-            toast("Fotoğraf çekilemedi.");
-            return;
-        }
-        Bitmap foto = Bitmap.createBitmap(goruntu.getWidth(), goruntu.getHeight(), Bitmap.Config.ARGB_8888);
-        Canvas c = new Canvas(foto);
-        c.drawBitmap(goruntu, 0, 0, null);
-        c.scale(foto.getWidth() / (float) cizim.getWidth(), foto.getHeight() / (float) cizim.getHeight());
-        cizim.draw(c);
-        flas.setAlpha(0.8f);
-        flas.animate().alpha(0f).setDuration(300).start();
-        if (Build.VERSION.SDK_INT < 29
-            && ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-            kaydedilecek = foto;
-            depoIzni.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE);
-            return;
-        }
-        arkadaKaydet(foto);
-    }
-
-    private void arkadaKaydet(Bitmap foto) {
-        new Thread(() -> {
-            try {
-                Galeri.kaydet(this, foto);
-                runOnUiThread(() -> toast("Fotoğraf galeriye kaydedildi."));
-            } catch (Exception e) {
-                Log.e(ETIKET, "Fotoğraf kaydedilemedi", e);
-                runOnUiThread(() -> toast("Fotoğraf kaydedilemedi."));
-            }
-        }).start();
-    }
-
     // ---------- Durum ----------
 
     private void durumuYaz() {
-        yuzSayisi.setText(Cip.sayac("Yüz", sonYuzSayisi, ayarlar.renk));
-        elSayisi.setText(Cip.sayac("El", sonElSayisi, ayarlar.renk));
+        yuzSayisi.setText(String.valueOf(sonYuzSayisi));
+        yuzSayisi.setTextColor(ayarlar.renk);
+        elSayisi.setText(String.valueOf(sonElSayisi));
+        elSayisi.setTextColor(ayarlar.renk);
         int fps = Math.round(Math.min(algilayici.yuz.fps.deger(), algilayici.el.fps.deger()));
-        fpsYazisi.setText(fps + " FPS · " + (ayarlar.gpu ? "GPU" : "CPU"));
+        fpsYazisi.setText(fps + " FPS");
+        hizlandiriciYazisi.setText(ayarlar.gpu ? "GPU" : "CPU");
         yzPaneli.guncelle();
     }
 

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#0b1120" />
+    <meta name="theme-color" content="#070b14" />
     <title>Dedektör</title>
   </head>
   <body>
@@ -27,20 +27,54 @@
     </button>
 
     <section id="giris">
-      <h1>Dedektör</h1>
-      <p>Kamerada yüzünü ve ellerini gerçek zamanlı algılar. Görüntü cihazdan çıkmaz.</p>
-      <button id="baslat" type="button">Başlat</button>
+      <div class="marka">
+        <svg class="logo" width="56" height="56" viewBox="0 0 56 56" fill="none" aria-hidden="true">
+          <rect x="0.5" y="0.5" width="55" height="55" rx="16" fill="#0F1626" stroke="#1E2738" />
+          <path d="M15 23v-4a4 4 0 0 1 4-4h4 M33 15h4a4 4 0 0 1 4 4v4 M41 33v4a4 4 0 0 1-4 4h-4 M23 41h-4a4 4 0 0 1-4-4v-4" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
+          <circle cx="28" cy="28" r="5" fill="currentColor" />
+        </svg>
+        <h1>Dedektör</h1>
+        <p class="aciklama">Yüzünü, ellerini ve elindeki nesneyi kamerada anında tanır. Görüntü telefonundan hiç çıkmaz.</p>
+      </div>
+
+      <ul class="ozellikler">
+        <li>
+          <span class="simge"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M8.5 14.5a4 4 0 0 0 7 0" /><path d="M9 9.5h.01M15 9.5h.01" /></svg></span>
+          <div><strong>Yüz ağı ve ifadeler</strong><span>Gülümseme, şaşırma, göz kırpma</span></div>
+        </li>
+        <li>
+          <span class="simge"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 11V6a2 2 0 0 0-4 0" /><path d="M14 10V4a2 2 0 0 0-4 0v2" /><path d="M10 10.5V6a2 2 0 0 0-4 0v8" /><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-6-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" /></svg></span>
+          <div><strong>El hareketleri</strong><span>Parmak sayısı, havada çizim, taş-kağıt-makas</span></div>
+        </li>
+        <li>
+          <span class="simge"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" /><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" /></svg></span>
+          <div><strong>Yapay zekâ</strong><span>TİD harfleri, kişi, egzersiz, nesne</span></div>
+        </li>
+        <li>
+          <span class="simge"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg></span>
+          <div><strong>İnternetsiz çalışır</strong><span>Bütün modeller cihazda</span></div>
+        </li>
+      </ul>
+
+      <div class="esneme"></div>
+
+      <button id="baslat" type="button">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z" /><circle cx="12" cy="13" r="3" /></svg>
+        Kamerayı aç
+      </button>
       <p id="mesaj" role="status"></p>
 
       <footer id="guncelleme">
-        <span id="surum"></span>
         <div id="yeni-surum" hidden>
-          <strong id="yeni-baslik"></strong>
-          <ul id="yeni-notlar"></ul>
+          <div class="yeni-metin">
+            <strong id="yeni-baslik"></strong>
+            <ul id="yeni-notlar"></ul>
+          </div>
           <button id="guncelle" type="button">Güncelle</button>
         </div>
         <button id="denetle" type="button" hidden>Güncellemeleri denetle</button>
         <p id="guncelleme-durum" role="status"></p>
+        <span id="surum"></span>
       </footer>
     </section>
 

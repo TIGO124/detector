@@ -22,36 +22,116 @@
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
 
-    <style name="Hap">
+    <!-- Yeni arayüz (Claude Design: "Dedektör Arayüzü"). Yazı: Manrope, sayılar ve başlıklar: Space Grotesk. -->
+    <style name="CamHap">
         <item name="android:layout_width">wrap_content</item>
-        <item name="android:layout_height">wrap_content</item>
-        <item name="android:background">@drawable/hap_zemin</item>
-        <item name="android:paddingStart">12dp</item>
-        <item name="android:paddingEnd">12dp</item>
-        <item name="android:paddingTop">6dp</item>
-        <item name="android:paddingBottom">6dp</item>
-        <item name="android:textColor">#E2E8F0</item>
-        <item name="android:textSize">14sp</item>
+        <item name="android:layout_height">44dp</item>
+        <item name="android:background">@drawable/cam_hap</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:paddingStart">14dp</item>
+        <item name="android:paddingEnd">14dp</item>
     </style>
 
-    <style name="AyarBasligi">
-        <item name="android:layout_width">wrap_content</item>
-        <item name="android:layout_height">wrap_content</item>
-        <item name="android:layout_marginTop">16dp</item>
-        <item name="android:layout_marginBottom">8dp</item>
-        <item name="android:textColor">#94A3B8</item>
-        <item name="android:textSize">14sp</item>
+    <style name="CamDaire">
+        <item name="android:layout_width">44dp</item>
+        <item name="android:layout_height">44dp</item>
+        <item name="android:background">@drawable/cam_daire</item>
+        <item name="android:scaleType">center</item>
+        <item name="tint">@color/yazi</item>
     </style>
 
-    <style name="AyarAnahtari">
-        <item name="android:layout_width">match_parent</item>
+    <style name="Ipucu">
+        <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:layout_marginTop">8dp</item>
-        <item name="android:minHeight">44dp</item>
-        <item name="android:textColor">#E2E8F0</item>
+        <item name="android:background">@drawable/cam_hap</item>
+        <item name="android:paddingStart">14dp</item>
+        <item name="android:paddingEnd">14dp</item>
+        <item name="android:paddingTop">9dp</item>
+        <item name="android:paddingBottom">9dp</item>
+        <item name="android:drawablePadding">8dp</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:fontFamily">@font/manrope_kalin</item>
+        <item name="android:textColor">@color/yazi_cam</item>
+        <item name="android:textSize">13sp</item>
+    </style>
+
+    <style name="Sayi">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:fontFamily">@font/space_grotesk_kalin</item>
         <item name="android:textSize">16sp</item>
-        <item name="thumbTint">@color/anahtar_dugme</item>
-        <item name="trackTint">@color/anahtar_yol</item>
+        <item name="android:textColor">@color/yazi</item>
+        <item name="android:fontFeatureSettings">tnum</item>
+    </style>
+
+    <style name="YaprakBasligi">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:fontFamily">@font/space_grotesk_kalin</item>
+        <item name="android:textSize">24sp</item>
+        <item name="android:textColor">@color/yazi</item>
+    </style>
+
+    <style name="BolumEtiketi">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">18dp</item>
+        <item name="android:layout_marginBottom">10dp</item>
+        <item name="android:fontFamily">@font/manrope_cok_kalin</item>
+        <item name="android:letterSpacing">0.1</item>
+        <item name="android:textColor">@color/soluk</item>
+        <item name="android:textSize">11sp</item>
+    </style>
+
+    <style name="SatirBasligi">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:fontFamily">@font/manrope_kalin</item>
+        <item name="android:textColor">@color/yazi</item>
+        <item name="android:textSize">15sp</item>
+    </style>
+
+    <style name="SatirAciklama">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:fontFamily">@font/manrope_orta</item>
+        <item name="android:textColor">@color/soluk</item>
+        <item name="android:textSize">13sp</item>
+    </style>
+
+    <style name="AnaDugme">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">52dp</item>
+        <item name="android:background">@drawable/dolu_hap</item>
+        <item name="android:gravity">center</item>
+        <item name="android:drawablePadding">8dp</item>
+        <item name="android:fontFamily">@font/manrope_cok_kalin</item>
+        <item name="android:textColor">@color/vurgu_ustu</item>
+        <item name="android:textSize">16sp</item>
+    </style>
+
+    <style name="IkincilDugme">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">44dp</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:background">@drawable/ikincil_hap</item>
+        <item name="android:gravity">center</item>
+        <item name="android:drawablePadding">7dp</item>
+        <item name="android:paddingStart">14dp</item>
+        <item name="android:paddingEnd">14dp</item>
+        <item name="android:fontFamily">@font/manrope_kalin</item>
+        <item name="android:textColor">@color/yazi_ikincil</item>
+        <item name="android:textSize">14sp</item>
+        <item name="drawableTint">@color/yazi_ikincil</item>
+    </style>
+
+    <style name="Anahtar">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:thumb">@drawable/anahtar_top</item>
+        <item name="track">@drawable/anahtar_iz</item>
+        <item name="android:minHeight">44dp</item>
     </style>
 
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">

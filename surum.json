@@ -1,6 +1,6 @@
 {
-  "surum": "1.4.0",
+  "surum": "1.5.0",
   "notlar": [
-    "Yapay zeka modu: kendi el hareketlerini öğret, TİD harfleri, duygu, kişi tanıma ve egzersiz sayacı"
+    "Nesne modu: elindeki nesneyi tanır (80 günlük nesne), kendi nesnelerini de öğretebilirsin"
   ]
 }

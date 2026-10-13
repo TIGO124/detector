@@ -3,6 +3,7 @@ package app.tigo.dedektor;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.DashPathEffect;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
@@ -50,6 +51,8 @@ public class CizimView extends View {
     private final Paint hatKalemi = kalem();
     private final Paint elKalemi = kalem();
     private final Paint cizimKalemi = kalem();
+    private final Paint nesneKalemi = kalem();
+    private final Paint cerceveKalemi = kalem();
     private final Paint eklemKalemi = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint etiketZemini = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint etiketYazisi = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -82,6 +85,7 @@ public class CizimView extends View {
     private volatile List<String> ifadeler = Collections.emptyList();
     private volatile PoseLandmarkerResult vucut;
     private volatile Bitmap arkaPlan;
+    private volatile List<NesneTanima.Nesne> nesneler = Collections.emptyList();
     private volatile int resimGenisligi = 1;
     private volatile int resimYuksekligi = 1;
     private volatile boolean aynali = true;
@@ -98,6 +102,10 @@ public class CizimView extends View {
         elKalemi.setStrokeWidth(3f * dp);
         cizimKalemi.setStrokeWidth(6f * dp);
         cizimKalemi.setStrokeJoin(Paint.Join.ROUND);
+        nesneKalemi.setStrokeJoin(Paint.Join.ROUND);
+        cerceveKalemi.setStrokeWidth(2f * dp);
+        cerceveKalemi.setColor(0xB3FFFFFF);
+        cerceveKalemi.setPathEffect(new DashPathEffect(new float[] {10f * dp, 8f * dp}, 0));
         etiketYazisi.setColor(KOYU);
         etiketYazisi.setTextSize(15f * dp);
         etiketYazisi.setFakeBoldText(true);
@@ -145,6 +153,7 @@ public class CizimView extends View {
         ifadeler = Collections.emptyList();
         vucut = null;
         arkaPlan = null;
+        nesneler = Collections.emptyList();
         postInvalidate();
     }
 
@@ -185,6 +194,18 @@ public class CizimView extends View {
 
     void arkaPlaniTemizle() {
         arkaPlan = null;
+        postInvalidate();
+    }
+
+    void nesneleriTemizle() {
+        nesneler = Collections.emptyList();
+        postInvalidate();
+    }
+
+    /** Elindeki nesne bölümü: algılanan nesneler (kutular normalize). */
+    void nesneGuncelle(List<NesneTanima.Nesne> liste, int g, int y) {
+        boyut(g, y);
+        nesneler = liste;
         postInvalidate();
     }
 
@@ -235,6 +256,8 @@ public class CizimView extends View {
 
         if (mod == Ayarlar.Mod.CIZIM && havadaCizim != null) havadaCizimiCiz(tuval);
 
+        if (ayarlar.nesneGerekli()) nesneleriCiz(tuval, nesneler);
+
         // Yapay zekâ modunda etiketler sonucun kendisi: ayardan bağımsız gösterilir.
         boolean etiket = ayarlar.etiketler || mod == Ayarlar.Mod.YZ;
         elleriCiz(tuval, eller, etiket, mod == Ayarlar.Mod.YZ);
@@ -248,6 +271,7 @@ public class CizimView extends View {
         hatKalemi.setColor(renk);
         elKalemi.setColor(renk);
         cizimKalemi.setColor(renk);
+        nesneKalemi.setColor(renk);
         etiketZemini.setColor(renk);
         agKalemi.setColor((renk & 0x00FFFFFF) | 0x59000000);
         // Eklemler renkten biraz açık
@@ -274,6 +298,26 @@ public class CizimView extends View {
             for (int i = 1; i < cizgi.length; i++) yol.lineTo(x(cizgi[i][0]), y(cizgi[i][1]));
             tuval.drawPath(yol, cizimKalemi);
         }
+    }
+
+    /** Ortadaki çerçeve (öğretilen nesneler burada tanınır) ve algılanan nesnelerin kutuları. */
+    private void nesneleriCiz(Canvas tuval, List<NesneTanima.Nesne> liste) {
+        float[] c = NesneTanima.cerceve(resimGenisligi, resimYuksekligi);
+        kutuCiz(tuval, c, cerceveKalemi);
+        for (NesneTanima.Nesne n : liste) {
+            nesneKalemi.setStrokeWidth((n.elde ? 4f : 2f) * dp);
+            kutuCiz(tuval, n.kutu, nesneKalemi);
+            String metin = (n.elde ? "Elinde: " : "") + n.ad + " %" + Math.round(100 * n.puan);
+            etiketCiz(tuval, metin, (x(n.kutu[0]) + x(n.kutu[2])) / 2, y(n.kutu[1]) - 4f * dp, true);
+        }
+    }
+
+    /** Normalize kutu {sol, üst, sağ, alt}; ön kamerada aynalı olduğundan kenarlar sıralanır. */
+    private void kutuCiz(Canvas tuval, float[] k, Paint kalem) {
+        float a = x(k[0]);
+        float b = x(k[2]);
+        kutu.set(Math.min(a, b), y(k[1]), Math.max(a, b), y(k[3]));
+        tuval.drawRoundRect(kutu, 10f * dp, 10f * dp, kalem);
     }
 
     private void elleriCiz(Canvas tuval, List<ElTakibi.ElDurumu> eller, boolean etiket, boolean yz) {

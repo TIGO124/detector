@@ -6,6 +6,7 @@ import android.os.SystemClock;
 import android.util.Log;
 import com.google.mediapipe.tasks.components.containers.Category;
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark;
+import com.google.mediapipe.tasks.vision.objectdetector.ObjectDetectorResult;
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -24,7 +25,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.json.JSONException;
 
 /**
- * Yapay zekâ modu: kendi el hareketlerin, TİD harfleri, duygu, kişi ve egzersiz tanıma.
+ * Yapay zekâ modu: kendi el hareketlerin, TİD harfleri, duygu, kişi, egzersiz ve elindeki nesne.
  * Hareket ve TİD modelleri "Öğret" ile kaydedilen örneklerden telefonda (ya da bilgisayarda)
  * eğitilir; duygu ve egzersiz modelleri bilgisayarda eğitilip APK'ya konmuştur. Sonuçlar
  * MediaPipe iş parçacıklarından gelir; ekranda gösterilecek olanlar burada tutulur.
@@ -35,18 +36,15 @@ final class YzTanima {
     static final float ESIK = 0.7f;
     static final long KAYIT_MS = 3000;
     private static final int GECMIS = 5;
-    /** Harf bu kadar kare sabit kalınca yazıya eklenir. */
-    private static final int TID_SABIT = 8;
-    /** Bu kadar kare harf görülmezse aynı harf yeniden eklenebilir. */
-    private static final int TID_BOS = 5;
-    private static final int TID_EN_UZUN = 60;
     private static final long KISI_ARALIGI_MS = 400;
-    private static final long KISI_KAYIT_ARALIGI_MS = 250;
+    private static final long NESNE_ARALIGI_MS = 300;
+    private static final long KAYIT_ARALIGI_MS = 250;
     private static final String ETIKET = "Dedektor";
 
     final YzVeri hareketVerisi;
     final YzVeri tidVerisi;
     final YzVeri kisiVerisi;
+    final YzVeri nesneVerisi;
     final EgzersizSayaci sayac = new EgzersizSayaci();
     /** Egzersizde bir tekrar tamamlanınca çağrılır (vücut modelinin iş parçacığından). */
     volatile Runnable tekrarOldu;
@@ -66,28 +64,18 @@ final class YzTanima {
     private final AtomicInteger kayitSayisi = new AtomicInteger();
 
     private final Map<String, ArrayDeque<String>> elGecmisi = new HashMap<>();
-    private final ArrayDeque<TidKaresi> tidKareleri = new ArrayDeque<>();
-    private final StringBuilder tidMetni = new StringBuilder();
-    private String tidAday = "";
-    private int tidSabit;
-    private String tidSonEklenen = "";
+    private final TidYazici tid = new TidYazici();
+    private final NesneTanima nesne;
     private float[] duyguOrtalamasi;
     private final ArrayDeque<String> kisiGecmisi = new ArrayDeque<>();
     private volatile String kisiEtiketi;
     private volatile long sonKisi;
     private volatile boolean vucutGorunuyor;
-
-    private static final class TidKaresi {
-        final long zaman;
-        final float[] oz;
-        final float[] bilek;
-
-        TidKaresi(long zaman, float[] oz, float[] bilek) {
-            this.zaman = zaman;
-            this.oz = oz;
-            this.bilek = bilek;
-        }
-    }
+    private final ArrayDeque<String> nesneGecmisi = new ArrayDeque<>();
+    private final ArrayDeque<String> ozelGecmisi = new ArrayDeque<>();
+    private volatile String nesneYazisi;
+    private volatile String ozelNesne;
+    private volatile long sonNesneImzasi;
 
     YzTanima(Context baglam) {
         this.baglam = baglam.getApplicationContext();
@@ -95,7 +83,9 @@ final class YzTanima {
         if (!klasor.isDirectory() && !klasor.mkdirs()) Log.w(ETIKET, "YZ klasörü oluşturulamadı");
         hareketVerisi = new YzVeri(new File(klasor, "hareket.veri"), YzOzellik.EL_BOYUTU);
         tidVerisi = new YzVeri(new File(klasor, "tid.veri"), YzOzellik.PENCERE_BOYUTU);
-        kisiVerisi = new YzVeri(kisiDosyasi(), KisiTanima.IMZA_BOYUTU);
+        kisiVerisi = new YzVeri(surumluDosya("kisiler", kisiSurumu()), KisiTanima.IMZA_BOYUTU);
+        nesneVerisi = new YzVeri(surumluDosya("nesneler", NesneTanima.IMZA_SURUMU), NesneTanima.IMZA_BOYUTU);
+        nesne = new NesneTanima(baglam);
         duyguModeli = hazirModel("yz/duygu.json");
         egzersizModeli = hazirModel("yz/egzersiz.json");
         hareketModeli = kayitliModel(Ayarlar.Yz.HAREKET);
@@ -115,7 +105,7 @@ final class YzTanima {
         boolean kayit = kayitta(Ayarlar.Yz.HAREKET);
         for (ElTakibi.ElDurumu el : eller) {
             if (el.dunya == null) continue;
-            float[] x = YzOzellik.el(el.dunya, sol(el));
+            float[] x = YzOzellik.el(el.dunya, el.sol());
             if (kayit) ornekEkle(hareketVerisi, x);
             if (m == null) continue;
             ArrayDeque<String> g = elGecmisi.computeIfAbsent(el.taraf, k -> new ArrayDeque<>());
@@ -127,77 +117,21 @@ final class YzTanima {
     }
 
     private void tid(List<ElTakibi.ElDurumu> eller, long zaman) {
-        ElTakibi.ElDurumu sol = null;
-        ElTakibi.ElDurumu sag = null;
-        for (ElTakibi.ElDurumu el : eller) {
-            if (el.dunya == null) continue;
-            if (sol(el)) {
-                if (sol == null) sol = el;
-            } else if (sag == null) {
-                sag = el;
-            }
-        }
-        float[] bilek = {Float.NaN, Float.NaN, Float.NaN, Float.NaN};
-        float[] solBilek = null;
-        float[] sagBilek = null;
-        if (sol != null) solBilek = new float[] {bilek[0] = sol.noktalar.get(0).x(), bilek[1] = sol.noktalar.get(0).y()};
-        if (sag != null) sagBilek = new float[] {bilek[2] = sag.noktalar.get(0).x(), bilek[3] = sag.noktalar.get(0).y()};
-        float[] oz = YzOzellik.ikiEl(sol == null ? null : sol.dunya, solBilek, sag == null ? null : sag.dunya, sagBilek);
-        tidKareleri.addLast(new TidKaresi(zaman, oz, bilek));
-        while (!tidKareleri.isEmpty() && zaman - tidKareleri.peekFirst().zaman > 2 * YzOzellik.PENCERE_MS) tidKareleri.removeFirst();
-        if (sol == null && sag == null) {
-            tidSonucu("");
-            return;
-        }
-        float[] x = pencere(zaman);
+        float[] x = tid.kare(eller, zaman);
         if (x == null) return;
         if (kayitta(Ayarlar.Yz.TID)) ornekEkle(tidVerisi, x);
         SinirAgi m = tidModeli;
         String harf = m == null ? "" : etiket(m, x);
-        tidSonucu(harf);
+        tid.sonuc(harf);
         if (!harf.isEmpty()) for (ElTakibi.ElDurumu el : eller) el.yzEtiketi = harf;
     }
 
-    /** Son PENCERE_MS'den eşit aralıklı PENCERE kare; yeterince kare yoksa null. */
-    private float[] pencere(long zaman) {
-        TidKaresi ilk = tidKareleri.peekFirst();
-        if (ilk == null || zaman - ilk.zaman < YzOzellik.PENCERE_MS * 2 / 3) return null;
-        float[][] oz = new float[YzOzellik.PENCERE][];
-        float[][] bilek = new float[YzOzellik.PENCERE][];
-        for (int k = 0; k < YzOzellik.PENCERE; k++) {
-            long hedef = zaman - YzOzellik.PENCERE_MS + k * YzOzellik.PENCERE_MS / (YzOzellik.PENCERE - 1);
-            TidKaresi en = ilk;
-            for (TidKaresi t : tidKareleri) if (Math.abs(t.zaman - hedef) < Math.abs(en.zaman - hedef)) en = t;
-            oz[k] = en.oz;
-            bilek[k] = en.bilek;
-        }
-        return YzOzellik.pencere(oz, bilek);
+    String tidMetni() {
+        return tid.metin();
     }
 
-    /** Harf bir süre sabit kalınca yazıya eklenir; aynı harfi tekrar yazmak için el kısa süre indirilir. */
-    private void tidSonucu(String harf) {
-        if (harf.equals(tidAday)) tidSabit++;
-        else {
-            tidAday = harf;
-            tidSabit = 1;
-        }
-        if (harf.isEmpty()) {
-            if (tidSabit >= TID_BOS) tidSonEklenen = "";
-        } else if (tidSabit == TID_SABIT && !harf.equals(tidSonEklenen)) {
-            tidMetni.append(harf.length() > 1 ? harf + " " : harf);
-            if (tidMetni.length() > TID_EN_UZUN) tidMetni.delete(0, tidMetni.length() - TID_EN_UZUN);
-            tidSonEklenen = harf;
-        }
-    }
-
-    synchronized String tidMetni() {
-        return tidMetni.toString();
-    }
-
-    synchronized void tidDuzenle(String islem) {
-        if ("bosluk".equals(islem)) tidMetni.append(' ');
-        else if ("sil".equals(islem) && tidMetni.length() > 0) tidMetni.setLength(tidMetni.length() - 1);
-        else if ("temizle".equals(islem)) tidMetni.setLength(0);
+    void tidDuzenle(String islem) {
+        tid.duzenle(islem);
     }
 
     // ---------- Yüz: duygu ve kişi ----------
@@ -233,7 +167,7 @@ final class YzTanima {
         KisiTanima k = kisiModeli();
         if (k == null) return "Kişi modeli açılamadı";
         long simdi = SystemClock.uptimeMillis();
-        long aralik = kayitta(Ayarlar.Yz.KISI) ? KISI_KAYIT_ARALIGI_MS : KISI_ARALIGI_MS;
+        long aralik = kayitta(Ayarlar.Yz.KISI) ? KAYIT_ARALIGI_MS : KISI_ARALIGI_MS;
         if (resim != null && simdi - sonKisi >= aralik && k.imzaCikar(noktalar, resim, this::kisiImzasi)) sonKisi = simdi;
         if (kayitta(Ayarlar.Yz.KISI)) return "Kaydediliyor: " + kayitEtiketi;
         return kisiEtiketi;
@@ -296,6 +230,53 @@ final class YzTanima {
         return l.visibility().orElse(1f);
     }
 
+    // ---------- Elindeki nesne ----------
+
+    /**
+     * Nesne algılayıcının sonucu (kendi iş parçacığında): ekranda çizilecek nesneler. Öğretilen
+     * nesne varsa (ya da kaydediliyorsa) çerçevenin imzası da arada bir çıkarılır.
+     */
+    List<NesneTanima.Nesne> nesne(ObjectDetectorResult s, Bitmap kare, List<ElTakibi.ElDurumu> eller) {
+        int g = kare.getWidth();
+        int y = kare.getHeight();
+        List<NesneTanima.Nesne> liste = NesneTanima.nesneler(s, g, y, eller);
+        NesneTanima.Nesne ana = NesneTanima.anaNesne(liste, NesneTanima.cerceve(g, y));
+        boolean kayit = kayitta(Ayarlar.Yz.NESNE);
+        long simdi = SystemClock.uptimeMillis();
+        if ((kayit || nesneVerisi.toplam() > 0) && simdi - sonNesneImzasi >= (kayit ? KAYIT_ARALIGI_MS : NESNE_ARALIGI_MS)
+            && nesne.imzaCikar(kare, this::nesneImzasi)) {
+            sonNesneImzasi = simdi;
+        }
+        synchronized (this) {
+            nesneGecmisi.addLast(ana == null ? "" : ana.elde ? "Elinde: " + ana.ad : ana.ad);
+            while (nesneGecmisi.size() > GECMIS) nesneGecmisi.removeFirst();
+            nesneYazisi = cogunluk(nesneGecmisi);
+            if (nesneVerisi.toplam() == 0) ozelNesne = null;
+        }
+        return liste;
+    }
+
+    private void nesneImzasi(float[] imza) {
+        if (kayitta(Ayarlar.Yz.NESNE)) {
+            ornekEkle(nesneVerisi, imza);
+            return;
+        }
+        KisiTanima.Eslesme e = KisiTanima.enBenzer(imza, nesneVerisi.hepsi());
+        boolean tanindi = e != null && e.benzerlik >= NesneTanima.ESIK && !NesneTanima.BOS.equalsIgnoreCase(e.ad);
+        synchronized (this) {
+            ozelGecmisi.addLast(tanindi ? e.ad : "");
+            while (ozelGecmisi.size() > 3) ozelGecmisi.removeFirst();
+            ozelNesne = cogunluk(ozelGecmisi);
+        }
+    }
+
+    /** Büyük yazı: öğretilen nesne, yoksa eldeki (ya da çerçevedeki) hazır nesne; yoksa null. */
+    String nesneYazisi() {
+        if (kayitta(Ayarlar.Yz.NESNE)) return "Kaydediliyor: " + kayitEtiketi;
+        String o = ozelNesne;
+        return o != null ? o : nesneYazisi;
+    }
+
     // ---------- Öğret: kayıt, eğitim, modeller ----------
 
     YzVeri veri(Ayarlar.Yz tur) {
@@ -303,6 +284,7 @@ final class YzTanima {
             case HAREKET: return hareketVerisi;
             case TID: return tidVerisi;
             case KISI: return kisiVerisi;
+            case NESNE: return nesneVerisi;
             default: return null;
         }
     }
@@ -420,20 +402,23 @@ final class YzTanima {
         return new String(o.toByteArray(), StandardCharsets.UTF_8);
     }
 
-    /**
-     * Yüz imzaları yalnızca onları üreten modelle karşılaştırılabilir: kayıt dosyasının adı modele
-     * bağlıdır. Model güncellenince eski kayıtlar silinir (kişiler yeniden eklenir).
-     */
-    private File kisiDosyasi() {
-        String surum = "0";
+    private String kisiSurumu() {
         try {
-            surum = Integer.toHexString(KisiTanima.oku(baglam, "yz/kimlik.json").hashCode());
+            return Integer.toHexString(KisiTanima.oku(baglam, "yz/kimlik.json").hashCode());
         } catch (IOException e) {
             Log.w(ETIKET, "Kişi modeli bilgisi okunamadı", e);
+            return "0";
         }
-        String ad = "kisiler_" + surum + ".veri";
-        File[] eskiler = klasor.listFiles((k, a) -> a.startsWith("kisiler") && a.endsWith(".veri") && !a.equals(ad));
-        if (eskiler != null) for (File f : eskiler) if (!f.delete()) Log.w(ETIKET, "Eski kişi kaydı silinemedi");
+    }
+
+    /**
+     * İmzalar (yüz, nesne) yalnızca onları üreten modelle karşılaştırılabilir: kayıt dosyasının
+     * adı modele bağlıdır. Model güncellenince eski kayıtlar silinir (yeniden eklenir).
+     */
+    private File surumluDosya(String onEk, String surum) {
+        String ad = onEk + "_" + surum + ".veri";
+        File[] eskiler = klasor.listFiles((k, a) -> a.startsWith(onEk) && a.endsWith(".veri") && !a.equals(ad));
+        if (eskiler != null) for (File f : eskiler) if (!f.delete()) Log.w(ETIKET, "Eski kayıt silinemedi: " + f.getName());
         return new File(klasor, ad);
     }
 
@@ -463,15 +448,12 @@ final class YzTanima {
         return null;
     }
 
-    private static boolean sol(ElTakibi.ElDurumu el) {
-        return "Sol el".equals(el.taraf);
-    }
-
     void kapat() {
         KisiTanima k;
         synchronized (this) {
             k = kisi;
         }
         if (k != null) k.kapat();
+        nesne.kapat();
     }
 }

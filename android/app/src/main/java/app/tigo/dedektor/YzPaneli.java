@@ -13,12 +13,13 @@ import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
 
 /**
- * Yapay zekâ modunun düğmeleri: alt modlar (hareket, TİD, duygu, kişi, egzersiz), her birinin
- * işlemleri, TİD ile yazılan metin ve egzersiz sayacı. Öğretme işleri OgretPaneli'nde.
+ * Yapay zekâ modunun düğmeleri: alt modlar (hareket, TİD, duygu, kişi, egzersiz, nesne), her
+ * birinin işlemleri, TİD ile yazılan metin, egzersiz sayacı ve elindeki nesne. Öğretme işleri
+ * OgretPaneli'nde.
  */
 final class YzPaneli {
 
-    private static final String[] ADLAR = {"Hareket", "TİD", "Duygu", "Kişi", "Egzersiz"};
+    private static final String[] ADLAR = {"Hareket", "TİD", "Duygu", "Kişi", "Egzersiz", "Nesne"};
 
     private final AppCompatActivity etkinlik;
     private final Ayarlar ayarlar;
@@ -81,6 +82,9 @@ final class YzPaneli {
             case KISI:
                 islemler.addView(cip("Kişi ekle", true, v -> ogret.ac(Ayarlar.Yz.KISI)));
                 break;
+            case NESNE:
+                islemler.addView(cip("Nesne öğret", true, v -> ogret.ac(Ayarlar.Yz.NESNE)));
+                break;
             case EGZERSIZ:
                 for (EgzersizSayaci.Tur t : EgzersizSayaci.Tur.values()) {
                     islemler.addView(cip(t.ad, yz.sayac.tur() == t, v -> {
@@ -116,12 +120,15 @@ final class YzPaneli {
                     : "Kayıtlı kişiler yüzlerinden tanınır";
             case EGZERSIZ:
                 return "Telefonu sabitle, bütün vücudun görünsün";
+            case NESNE:
+                return yz.nesneVerisi.toplam() == 0 ? "Nesneyi ortadaki çerçeveye tut"
+                    : "Öğrettiğin nesneler çerçevede tanınır";
             default:
                 return null;
         }
     }
 
-    /** TİD metni ve egzersiz sayacı (saniyede birkaç kez). */
+    /** TİD metni, egzersiz sayacı ve elindeki nesne (saniyede birkaç kez). */
     void guncelle() {
         String metin = null;
         String alt = null;
@@ -131,6 +138,9 @@ final class YzPaneli {
         } else if (ayarlar.mod == Ayarlar.Mod.YZ && ayarlar.yz == Ayarlar.Yz.EGZERSIZ) {
             metin = yz.sayac.tur().ad + " · " + yz.sayac.sayi();
             alt = yz.egzersizDurumu();
+        } else if (ayarlar.mod == Ayarlar.Mod.YZ && ayarlar.yz == Ayarlar.Yz.NESNE) {
+            metin = yz.nesneYazisi();
+            if (metin == null) metin = "…";
         }
         String anahtar = metin + "|" + alt;
         if (anahtar.equals(sonBuyuk)) return;

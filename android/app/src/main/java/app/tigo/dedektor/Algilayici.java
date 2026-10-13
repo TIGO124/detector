@@ -16,11 +16,14 @@ import com.google.mediapipe.tasks.vision.gesturerecognizer.GestureRecognizer;
 import com.google.mediapipe.tasks.vision.gesturerecognizer.GestureRecognizerResult;
 import com.google.mediapipe.tasks.vision.imagesegmenter.ImageSegmenter;
 import com.google.mediapipe.tasks.vision.imagesegmenter.ImageSegmenterResult;
+import com.google.mediapipe.tasks.vision.objectdetector.ObjectDetector;
+import com.google.mediapipe.tasks.vision.objectdetector.ObjectDetectorResult;
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker;
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -28,8 +31,8 @@ import java.util.function.BiConsumer;
 
 /**
  * MediaPipe modellerini kurar ve kameradan gelen kareleri boştaki modellere dağıtır. Her model
- * kendi iş parçacığında çalışır; bir öncekini bitirmeyen model yeni kare almaz. Vücut ve arka
- * plan modelleri yalnızca açıkken çalışır. Kurma/kapatma ve kare verme analiz iş parçacığından,
+ * kendi iş parçacığında çalışır; bir öncekini bitirmeyen model yeni kare almaz. Vücut, arka
+ * plan ve nesne modelleri yalnızca açıkken çalışır. Kurma/kapatma ve kare verme analiz iş parçacığından,
  * sonuçlar MediaPipe'ın iş parçacıklarından gelir.
  */
 final class Algilayici {
@@ -43,6 +46,9 @@ final class Algilayici {
         void vucut(PoseLandmarkerResult sonuc, int genislik, int yukseklik);
 
         void arkaPlan(ImageSegmenterResult sonuc, MPImage girdi);
+
+        /** girdi: kamera karesi; yalnızca bu çağrı sırasında geçerli. */
+        void nesne(ObjectDetectorResult sonuc, MPImage girdi);
 
         void bildir(String mesaj);
     }
@@ -73,6 +79,8 @@ final class Algilayici {
     /** Tek bir modelin durumu. */
     static final class Gorev {
         final AtomicBoolean mesgul = new AtomicBoolean();
+        /** İki kare arasında en az bu kadar beklenir (ağır, sık çalışması gerekmeyen modeller). */
+        final long enAzAralik;
         final FpsSayaci fps = new FpsSayaci();
         volatile BiConsumer<MPImage, Long> gonder;
         volatile Runnable kapatici;
@@ -80,6 +88,14 @@ final class Algilayici {
         volatile int nesil;
         private volatile long gonderim;
         private volatile Kare kare;
+
+        Gorev() {
+            this(0);
+        }
+
+        Gorev(long enAzAralik) {
+            this.enAzAralik = enAzAralik;
+        }
 
         boolean acik() {
             return gonder != null;
@@ -94,6 +110,7 @@ final class Algilayici {
                 kare = null;
                 mesgul.set(false);
             }
+            if (!mesgul.get() && simdi - gonderim < enAzAralik) return false;
             if (!mesgul.compareAndSet(false, true)) return false;
             gonderim = simdi;
             return true;
@@ -124,6 +141,8 @@ final class Algilayici {
     final Gorev el = new Gorev();
     final Gorev vucut = new Gorev();
     final Gorev arkaPlan = new Gorev();
+    /** Nesne algılayıcı: saniyede en çok ~6 kez (zayıf telefonda diğer modelleri boğmasın). */
+    final Gorev nesne = new Gorev(150);
 
     private final Context baglam;
     private final Dinleyici dinleyici;
@@ -159,6 +178,10 @@ final class Algilayici {
             vucut.kapat();
             vucutAyarla(true);
         }
+        if (nesne.acik()) {
+            nesne.kapat();
+            nesneAyarla(true);
+        }
         return gpu;
     }
 
@@ -183,6 +206,30 @@ final class Algilayici {
         } catch (RuntimeException e) {
             Log.e(ETIKET, "Vücut modeli kurulamadı", e);
             dinleyici.bildir("Vücut modeli yüklenemedi.");
+        }
+    }
+
+    /** Elindeki nesne: günlük 80 nesneyi bulan algılayıcı (insan hariç). */
+    void nesneAyarla(boolean ac) {
+        if (ac == nesne.acik()) return;
+        nesne.kapat();
+        if (!ac) return;
+        int n = nesne.nesil;
+        try {
+            ObjectDetector m = ObjectDetector.createFromOptions(baglam, ObjectDetector.ObjectDetectorOptions.builder()
+                .setBaseOptions(temel(NesneTanima.ALGILAYICI, hizlandirici))
+                .setRunningMode(RunningMode.LIVE_STREAM)
+                .setMaxResults(5)
+                .setScoreThreshold(0.35f)
+                .setCategoryDenylist(Collections.singletonList("person"))
+                .setResultListener((sonuc, girdi) -> sonucuIsle(nesne, n, () -> dinleyici.nesne(sonuc, girdi)))
+                .setErrorListener(h -> hata(nesne, n, "Nesne", h))
+                .build());
+            nesne.kapatici = m::close;
+            nesne.gonder = m::detectAsync;
+        } catch (RuntimeException e) {
+            Log.e(ETIKET, "Nesne modeli kurulamadı", e);
+            dinleyici.bildir("Nesne modeli yüklenemedi.");
         }
     }
 
@@ -214,6 +261,7 @@ final class Algilayici {
         el.kapat();
         vucut.kapat();
         arkaPlan.kapat();
+        nesne.kapat();
         synchronized (havuz) {
             havuz.clear();
         }
@@ -223,8 +271,8 @@ final class Algilayici {
     void kareVer(ImageProxy goruntu) {
         try {
             long zaman = SystemClock.uptimeMillis();
-            List<Gorev> alacaklar = new ArrayList<>(4);
-            for (Gorev g : new Gorev[] {yuz, el, vucut, arkaPlan}) if (g.ayir(zaman)) alacaklar.add(g);
+            List<Gorev> alacaklar = new ArrayList<>(5);
+            for (Gorev g : new Gorev[] {yuz, el, vucut, arkaPlan, nesne}) if (g.ayir(zaman)) alacaklar.add(g);
             if (alacaklar.isEmpty()) return;
             // Görüntü dik (setOutputImageRotationEnabled) ve aynalanmamış; el etiketleri doğru çıkar.
             Kare kare = kareyiKopyala(goruntu);

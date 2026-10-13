@@ -28,7 +28,7 @@ import java.util.concurrent.Executors;
  * "Öğret" paneli: bir ad yazılır, kısa geri sayımdan sonra 3 saniye örnek kaydedilir (el
  * hareketi, TİD harfi ya da yüz). Hareket ve TİD için "Eğit" modeli telefonda eğitir; örnekler
  * bilgisayara gönderilip ekran kartıyla da eğitilebilir (egitim/kisisel.py), çıkan model geri
- * yüklenir. Kişi eklemede eğitim gerekmez: yüz imzaları doğrudan saklanır.
+ * yüklenir. Kişi ve nesne eklemede eğitim gerekmez: imzalar doğrudan saklanır.
  */
 final class OgretPaneli {
 
@@ -95,15 +95,25 @@ final class OgretPaneli {
         // Aynı bölümde ad kalır (bir hareket birkaç kez kaydedilir); başka bölümde boş başlar.
         if (tur != this.tur) etiketKutusu.setText(null);
         this.tur = tur;
-        boolean kisi = tur == Ayarlar.Yz.KISI;
-        baslik.setText(kisi ? "Kişi ekle" : tur == Ayarlar.Yz.TID ? "Öğret · TİD harfleri" : "Öğret · El hareketleri");
-        aciklama.setText(kisi
-            ? "Adı yaz ve Kaydet'e bas. Geri sayımdan sonra 3 saniye kameraya bak, başını hafifçe sağa sola çevir."
-            : tur == Ayarlar.Yz.TID
-                ? "Harfin adını yaz (ör. A) ve Kaydet'e bas. Harfi 3 saniye işaretle; hareketli harflerde hareketi tekrarla. Her harfi 2-3 kez kaydet, sonra Eğit."
-                : "Hareketin adını yaz (ör. Selam) ve Kaydet'e bas. Hareketi 3 saniye farklı açılardan göster. En az iki hareket kaydet, sonra Eğit.");
-        etiketKutusu.setHint(kisi ? "Ad (ör. Ayşe)" : tur == Ayarlar.Yz.TID ? "Harf (ör. A)" : "Ad (ör. Selam)");
-        listeBasligi.setText(kisi ? "Kayıtlı kişiler (silmek için dokun)" : "Öğrettiklerin (silmek için dokun)");
+        switch (tur) {
+            case KISI:
+                yazilar("Kişi ekle", "Adı yaz ve Kaydet'e bas. Geri sayımdan sonra 3 saniye kameraya bak, başını hafifçe sağa sola çevir.",
+                    "Ad (ör. Ayşe)", "Kayıtlı kişiler (silmek için dokun)");
+                break;
+            case NESNE:
+                yazilar("Nesne öğret", "Nesnenin adını yaz ve Kaydet'e bas. 3 saniye nesneyi ortadaki çerçevede farklı açılardan göster. "
+                        + "Yanlış tanırsa çerçeve boşken \"" + NesneTanima.BOS + "\" adıyla da kaydet.",
+                    "Ad (ör. Anahtarım)", "Öğretilen nesneler (silmek için dokun)");
+                break;
+            case TID:
+                yazilar("Öğret · TİD harfleri", "Harfin adını yaz (ör. A) ve Kaydet'e bas. Harfi 3 saniye işaretle; hareketli harflerde hareketi tekrarla. Her harfi 2-3 kez kaydet, sonra Eğit.",
+                    "Harf (ör. A)", "Öğrettiklerin (silmek için dokun)");
+                break;
+            default:
+                yazilar("Öğret · El hareketleri", "Hareketin adını yaz (ör. Selam) ve Kaydet'e bas. Hareketi 3 saniye farklı açılardan göster. En az iki hareket kaydet, sonra Eğit.",
+                    "Ad (ör. Selam)", "Öğrettiklerin (silmek için dokun)");
+                break;
+        }
         renkleriAyarla();
         durum.setText(null);
         ilerleme.setVisibility(View.GONE);
@@ -112,13 +122,25 @@ final class OgretPaneli {
         panel.setVisibility(View.VISIBLE);
     }
 
+    private void yazilar(String b, String a, String ipucu, String liste) {
+        baslik.setText(b);
+        aciklama.setText(a);
+        etiketKutusu.setHint(ipucu);
+        listeBasligi.setText(liste);
+    }
+
+    /** Kişi ve nesnede eğitim yok: kaydedilen imzalar doğrudan karşılaştırılır. */
+    private boolean egitimsiz() {
+        return tur == Ayarlar.Yz.KISI || tur == Ayarlar.Yz.NESNE;
+    }
+
     private void renkleriAyarla() {
         kaydet.setBackgroundTintList(ColorStateList.valueOf(ayarlar.renk));
     }
 
     private void dugmeleriGoster() {
         dugmeler.removeAllViews();
-        if (tur != Ayarlar.Yz.KISI) {
+        if (!egitimsiz()) {
             dugmeler.addView(cip("Eğit", true, v -> egit()));
             dugmeler.addView(cip("Bilgisayara gönder", false, v -> disaAktar()));
             dugmeler.addView(cip("Model yükle", false, v -> {
@@ -150,7 +172,7 @@ final class OgretPaneli {
                 YzVeri v = yz.veri(tur);
                 v.sil(ad);
                 v.kaydet();
-                return tur == Ayarlar.Yz.KISI ? ad + " silindi." : ad + " silindi. Modeli güncellemek için Eğit'e bas.";
+                return egitimsiz() ? ad + " silindi." : ad + " silindi. Modeli güncellemek için Eğit'e bas.";
             }))
             .show();
     }
@@ -189,8 +211,8 @@ final class OgretPaneli {
             String sonuc;
             try {
                 int n = yz.kayitBitir();
-                if (n == 0) sonuc = tur == Ayarlar.Yz.KISI ? "Yüz görülmedi, tekrar dene." : "El görülmedi, tekrar dene.";
-                else sonuc = n + " örnek kaydedildi." + (tur == Ayarlar.Yz.KISI ? "" : " Bitince Eğit'e bas.");
+                if (n == 0) sonuc = tur == Ayarlar.Yz.KISI ? "Yüz görülmedi, tekrar dene." : tur == Ayarlar.Yz.NESNE ? "Görüntü alınamadı, tekrar dene." : "El görülmedi, tekrar dene.";
+                else sonuc = n + " örnek kaydedildi." + (egitimsiz() ? "" : " Bitince Eğit'e bas.");
             } catch (Exception e) {
                 Log.e(ETIKET, "Örnekler kaydedilemedi", e);
                 sonuc = "Kaydedilemedi: " + e.getMessage();

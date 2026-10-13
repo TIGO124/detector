@@ -28,6 +28,11 @@ const modeller = {
     'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
   'selfie_segmenter.tflite':
     'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite',
+  // Yalnızca Android: elindeki nesne (80 günlük nesne) ve öğretilen nesnelerin görüntü imzası
+  'efficientdet_lite0.tflite':
+    'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/int8/1/efficientdet_lite0.tflite',
+  'mobilenet_v3_small_embedder.tflite':
+    'https://storage.googleapis.com/mediapipe-models/image_embedder/mobilenet_v3_small/float32/1/mobilenet_v3_small.tflite',
 };
 
 mkdirSync(join(hedef, 'wasm'), { recursive: true });

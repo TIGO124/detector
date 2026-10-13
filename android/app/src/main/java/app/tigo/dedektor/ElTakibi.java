@@ -63,6 +63,10 @@ final class ElTakibi {
             this.isaret = isaret;
         }
 
+        boolean sol() {
+            return "Sol el".equals(taraf);
+        }
+
         boolean yumruk() {
             return "Closed_Fist".equals(hareketKodu) || parmak == 0;
         }

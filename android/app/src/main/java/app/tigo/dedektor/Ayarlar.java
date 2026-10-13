@@ -8,7 +8,7 @@ final class Ayarlar {
     enum Mod { NORMAL, CIZIM, EFEKT, OYUN, YZ }
 
     /** Yapay zekâ modunun alt modları. */
-    enum Yz { HAREKET, TID, DUYGU, KISI, EGZERSIZ }
+    enum Yz { HAREKET, TID, DUYGU, KISI, EGZERSIZ, NESNE }
 
     enum ArkaPlan { KAPALI, BULANIK, DEGISTIR }
 
@@ -58,6 +58,11 @@ final class Ayarlar {
     /** Vücut modeli açık mı: ayarlardan ya da egzersiz sayarken. */
     boolean vucutGerekli() {
         return vucut || (mod == Mod.YZ && yz == Yz.EGZERSIZ);
+    }
+
+    /** Nesne algılayıcı yalnızca "Nesne" bölümünde çalışır. */
+    boolean nesneGerekli() {
+        return mod == Mod.YZ && yz == Yz.NESNE;
     }
 
     private static <E extends Enum<E>> E sec(E[] degerler, String ad, E varsayilan) {

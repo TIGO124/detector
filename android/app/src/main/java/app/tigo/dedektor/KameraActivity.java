@@ -38,6 +38,7 @@ import com.google.mediapipe.tasks.components.containers.NormalizedLandmark;
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult;
 import com.google.mediapipe.tasks.vision.gesturerecognizer.GestureRecognizerResult;
 import com.google.mediapipe.tasks.vision.imagesegmenter.ImageSegmenterResult;
+import com.google.mediapipe.tasks.vision.objectdetector.ObjectDetectorResult;
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult;
 import java.util.Collections;
 import java.util.List;
@@ -46,7 +47,7 @@ import java.util.concurrent.Executors;
 
 /**
  * Kamera ve algılama ekranı. Modlar: Normal (algılama), Çizim (havada çizim), Efekt (yüz
- * efektleri), Oyun (taş-kağıt-makas), YZ (öğretilen hareketler, TİD, duygu, kişi, egzersiz).
+ * efektleri), Oyun (taş-kağıt-makas), YZ (öğretilen hareketler, TİD, duygu, kişi, egzersiz, nesne).
  * Modeller Algilayici'da native çalışır; bu sınıf kamerayı, düğmeleri ve fotoğraf çekmeyi yönetir.
  */
 public class KameraActivity extends AppCompatActivity implements Algilayici.Dinleyici {
@@ -133,7 +134,7 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
         ayarPaneli = new AyarPaneli(this, ayarlar, cizim, () -> {
             modlariGoster();
             durumuYaz();
-        }, this::vucutModeliniAyarla, acik -> analiz.execute(() -> algilayici.arkaPlanAyarla(acik)));
+        }, this::modelleriAyarla, acik -> analiz.execute(() -> algilayici.arkaPlanAyarla(acik)));
 
         kenarBosluklariniAyarla();
         dugmeleriBagla();
@@ -226,15 +227,20 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
         ipucu.setText(metin);
         ipucu.setVisibility(metin == null ? View.GONE : View.VISIBLE);
         yzPaneli.goster(ayarlar.mod == Ayarlar.Mod.YZ);
-        vucutModeliniAyarla();
+        modelleriAyarla();
         cizim.invalidate();
     }
 
-    /** Vücut modeli ayarlardan ya da egzersiz sayarken açık; gerekmiyorsa kapatılır. */
-    private void vucutModeliniAyarla() {
-        boolean ac = ayarlar.vucutGerekli();
-        if (!ac) cizim.vucutuTemizle();
-        analiz.execute(() -> algilayici.vucutAyarla(ac));
+    /** İsteğe bağlı modeller: vücut (ayarlardan ya da egzersizde) ve nesne; gerekmeyen kapatılır. */
+    private void modelleriAyarla() {
+        boolean vucut = ayarlar.vucutGerekli();
+        boolean nesne = ayarlar.nesneGerekli();
+        if (!vucut) cizim.vucutuTemizle();
+        if (!nesne) cizim.nesneleriTemizle();
+        analiz.execute(() -> {
+            algilayici.vucutAyarla(vucut);
+            algilayici.nesneAyarla(nesne);
+        });
     }
 
     private void modSec(Ayarlar.Mod mod) {
@@ -337,6 +343,12 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
         if (tur == Ayarlar.ArkaPlan.KAPALI) return;
         Bitmap katman = arkaPlanIsleyici.katman(sonuc, girdi, tur);
         if (katman != null) cizim.arkaPlanGuncelle(katman);
+    }
+
+    @Override
+    public void nesne(ObjectDetectorResult sonuc, MPImage girdi) {
+        if (!ayarlar.nesneGerekli()) return;
+        cizim.nesneGuncelle(yz.nesne(sonuc, BitmapExtractor.extract(girdi), sonEller), girdi.getWidth(), girdi.getHeight());
     }
 
     @Override

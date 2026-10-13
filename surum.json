@@ -1,6 +1,6 @@
 {
-  "surum": "1.5.0",
+  "surum": "1.6.0",
   "notlar": [
-    "Nesne modu: elindeki nesneyi tanır (80 günlük nesne), kendi nesnelerini de öğretebilirsin"
+    "Yeni arayüz: yeni yazı tipleri, sonuç kartı, kamera uygulaması gibi mod sekmeleri, ayarlarda CPU/GPU seçimi"
   ]
 }

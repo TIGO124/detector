@@ -15,8 +15,9 @@ final class YuzOlaylari {
 
     enum Bas { EVET, HAYIR }
 
-    static final float GOZ_KAPALI = 0.55f;
-    static final float GOZ_ACIK = 0.4f;
+    /** Gözler kapalı / açık eşikleri: ifade etiketiyle ("Gözler kapalı") aynı. */
+    static final float GOZ_KAPALI = 0.5f;
+    static final float GOZ_ACIK = 0.35f;
     static final long UYKU_MS = 1500;
     static final float YAW_ESIK = 0.06f;
     static final float PITCH_ESIK = 0.04f;

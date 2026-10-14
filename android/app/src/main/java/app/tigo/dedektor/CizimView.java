@@ -11,15 +11,9 @@ import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.util.TypedValue;
 import android.view.View;
-import com.google.mediapipe.tasks.components.containers.Connection;
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark;
-import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarker;
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult;
-import com.google.mediapipe.tasks.vision.handlandmarker.HandLandmarker;
-import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker;
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -39,20 +33,6 @@ public class CizimView extends View {
     /** Vurgu renginin üstündeki yazı (Tasarım dili: "vurgu üstü"). */
     private static final int KOYU = 0xFF04140B;
 
-    private static final int[] AG = diziyeCevir(FaceLandmarker.FACE_LANDMARKS_TESSELATION);
-    private static final int[] YUZ_HATLARI = diziyeCevir(
-        FaceLandmarker.FACE_LANDMARKS_FACE_OVAL,
-        FaceLandmarker.FACE_LANDMARKS_LIPS,
-        FaceLandmarker.FACE_LANDMARKS_LEFT_EYE,
-        FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE,
-        FaceLandmarker.FACE_LANDMARKS_LEFT_EYE_BROW,
-        FaceLandmarker.FACE_LANDMARKS_RIGHT_EYE_BROW,
-        FaceLandmarker.FACE_LANDMARKS_LEFT_IRIS,
-        FaceLandmarker.FACE_LANDMARKS_RIGHT_IRIS
-    );
-    private static final int[] EL = diziyeCevir(HandLandmarker.HAND_CONNECTIONS);
-    /** Vücut iskeleti; yüz noktaları (0–10) yüz ağıyla çakışmasın diye atlanır. */
-    private static final int[] VUCUT = vucutBaglantilari();
     private static final int CENE = 152;
 
     private final Paint agKalemi = kalem();
@@ -102,6 +82,8 @@ public class CizimView extends View {
     private volatile Bitmap piksel;
     private volatile float[] pikselKutusu;
     private final List<Katman> katmanlar = new CopyOnWriteArrayList<>();
+    /** Fotoğraf ya da video için çiziliyor: ızgara çizilmez. Arayüz iş parçacığında. */
+    private boolean cekimIcin;
 
     private float olcek, kaymaX, kaymaY;
     private float[] cizgiler = new float[0];
@@ -135,25 +117,6 @@ public class CizimView extends View {
         p.setStyle(Paint.Style.STROKE);
         p.setStrokeCap(Paint.Cap.ROUND);
         return p;
-    }
-
-    /** Bağlantıları [başlangıç, bitiş, başlangıç, bitiş, ...] dizisine çevirir. */
-    @SafeVarargs
-    private static int[] diziyeCevir(Collection<Connection>... kumeler) {
-        List<Connection> hepsi = new ArrayList<>();
-        for (Collection<Connection> k : kumeler) hepsi.addAll(k);
-        int[] dizi = new int[hepsi.size() * 2];
-        for (int i = 0; i < hepsi.size(); i++) {
-            dizi[2 * i] = hepsi.get(i).start();
-            dizi[2 * i + 1] = hepsi.get(i).end();
-        }
-        return dizi;
-    }
-
-    private static int[] vucutBaglantilari() {
-        List<Connection> secili = new ArrayList<>();
-        for (Connection b : PoseLandmarker.POSE_LANDMARKS) if (b.start() > 10 && b.end() > 10) secili.add(b);
-        return diziyeCevir(secili);
     }
 
     void setAynali(boolean aynali) {
@@ -226,8 +189,18 @@ public class CizimView extends View {
         tuval.save();
         tuval.scale(g / (resimGenisligi * olcek), y / (resimYuksekligi * olcek));
         tuval.translate(-kaymaX, -kaymaY);
-        draw(tuval);
+        cekimIcinCiz(tuval);
         tuval.restore();
+    }
+
+    /** Çizimler fotoğrafa ya da videoya: ızgara (yalnızca kadraj yardımı) dışarıda kalır. */
+    void cekimIcinCiz(Canvas tuval) {
+        cekimIcin = true;
+        try {
+            draw(tuval);
+        } finally {
+            cekimIcin = false;
+        }
     }
 
     private void boyut(int genislik, int yukseklik) {
@@ -305,12 +278,12 @@ public class CizimView extends View {
 
         Bitmap katman = arkaPlan;
         if (katman != null && ayarlar.arkaPlan != Ayarlar.ArkaPlan.KAPALI) arkaPlaniCiz(tuval, katman);
-        if (ayarlar.izgara) izgaraCiz(tuval);
+        if (ayarlar.izgara && !cekimIcin) izgaraCiz(tuval);
 
         PoseLandmarkerResult v = vucut;
         if (v != null && ayarlar.vucutGerekli()) {
             for (List<NormalizedLandmark> n : v.landmarks()) {
-                cizgileriCiz(tuval, n, VUCUT, elKalemi);
+                cizgileriCiz(tuval, n, Baglantilar.VUCUT, elKalemi);
                 for (int i = 11; i < n.size(); i++) tuval.drawCircle(x(n.get(i).x()), y(n.get(i).y()), 4f * dp, eklemKalemi);
             }
         }
@@ -324,8 +297,8 @@ public class CizimView extends View {
                     else efektler.ciz(tuval, yuzNoktalari, ayarlar.efekt, ayarlar.renk);
                     continue;
                 }
-                if (ayarlar.yuzAgi) cizgileriCiz(tuval, n, AG, agKalemi);
-                cizgileriCiz(tuval, n, YUZ_HATLARI, hatKalemi);
+                if (ayarlar.yuzAgi) cizgileriCiz(tuval, n, Baglantilar.AG, agKalemi);
+                cizgileriCiz(tuval, n, Baglantilar.YUZ_HATLARI, hatKalemi);
             }
         }
 
@@ -422,7 +395,7 @@ public class CizimView extends View {
     private void elleriCiz(Canvas tuval, List<ElTakibi.ElDurumu> eller, boolean etiket, boolean yz) {
         for (ElTakibi.ElDurumu el : eller) {
             List<NormalizedLandmark> n = el.noktalar;
-            cizgileriCiz(tuval, n, EL, elKalemi);
+            cizgileriCiz(tuval, n, Baglantilar.EL, elKalemi);
             NormalizedLandmark enUst = n.get(0);
             for (NormalizedLandmark nokta : n) {
                 tuval.drawCircle(x(nokta.x()), y(nokta.y()), 3.5f * dp, eklemKalemi);

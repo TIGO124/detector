@@ -38,6 +38,8 @@ final class CekimKontrol {
     private final TextView kayitSuresi;
     private final ImageView kucukResim;
     private final ImageButton deklansor;
+    /** Ayarlar ve Öğret yaprakları: açıkken kendiliğinden çekilmez. */
+    private final View[] yapraklar;
     private final SharedPreferences tercihler;
     private final Handler ana = new Handler(Looper.getMainLooper());
     private final Tetik zafer = new Tetik(1000, 4000);
@@ -61,6 +63,7 @@ final class CekimKontrol {
         kayitSuresi = etkinlik.findViewById(R.id.kayit_suresi);
         kucukResim = etkinlik.findViewById(R.id.kucuk_resim);
         deklansor = etkinlik.findViewById(R.id.deklansor);
+        yapraklar = new View[] {etkinlik.findViewById(R.id.ayar_kaydirma), etkinlik.findViewById(R.id.ogret_kaydirma)};
         tercihler = etkinlik.getSharedPreferences("ipuclari", AppCompatActivity.MODE_PRIVATE);
         kucukResim.setClipToOutline(true);
         bagla();
@@ -158,9 +161,14 @@ final class CekimKontrol {
         });
     }
 
-    /** Oyunlarda (zafer = makas) ve yapay zekâ modunda (öğretilen hareketler) kendiliğinden çekilmez. */
+    /**
+     * Oyunlarda (zafer = makas), yapay zekâ modunda (öğretilen hareketler) ve bir yaprak
+     * açıkken kendiliğinden çekilmez.
+     */
     private boolean kendiligindenCekilir() {
-        return ayarlar.mod != Ayarlar.Mod.OYUN && ayarlar.mod != Ayarlar.Mod.YZ;
+        if (ayarlar.mod == Ayarlar.Mod.OYUN || ayarlar.mod == Ayarlar.Mod.YZ) return false;
+        for (View y : yapraklar) if (y.getVisibility() == View.VISIBLE) return false;
+        return true;
     }
 
     // ---------- Video ----------

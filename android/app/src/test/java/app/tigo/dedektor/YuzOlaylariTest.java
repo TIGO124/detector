@@ -103,11 +103,23 @@ public class YuzOlaylariTest {
         assertFalse(k.guncelle(true, 700));
         assertFalse(k.guncelle(true, 1600));
         assertTrue(k.guncelle(true, 1700));
-        // Bekleme süresince tetiklemez.
+        // Koşul sürdükçe (bekleme bitse de) yeniden tetiklemez.
         assertFalse(k.guncelle(true, 3000));
-        assertFalse(k.guncelle(true, 5600));
-        assertFalse(k.guncelle(true, 5800));
-        assertTrue(k.guncelle(true, 6800));
+        assertFalse(k.guncelle(true, 9000));
+        // Bırakılıp yeniden tutulunca tetikler.
+        assertFalse(k.guncelle(false, 9100));
+        assertFalse(k.guncelle(true, 9200));
+        assertTrue(k.guncelle(true, 10200));
+    }
+
+    @Test
+    public void tetikBeklemedeBirakilsaBile() {
+        Tetik k = new Tetik(0, 4000);
+        assertTrue(k.guncelle(true, 0));
+        assertFalse(k.guncelle(false, 100));
+        // Bırakıldı ama bekleme sürüyor.
+        assertFalse(k.guncelle(true, 3999));
+        assertTrue(k.guncelle(true, 4000));
     }
 
     @Test
@@ -115,6 +127,9 @@ public class YuzOlaylariTest {
         Tetik k = new Tetik(0, 4000);
         k.beklet(1000);
         assertFalse(k.guncelle(true, 2000));
-        assertTrue(k.guncelle(true, 5000));
+        // Elle çekimden sonra da koşul bir kez bitmeli.
+        assertFalse(k.guncelle(true, 5000));
+        assertFalse(k.guncelle(false, 5100));
+        assertTrue(k.guncelle(true, 5200));
     }
 }

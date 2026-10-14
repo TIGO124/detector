@@ -53,6 +53,8 @@ final class YuzEfektleri {
     private final RectF kutu = new RectF();
 
     YuzEfektleri() {
+        // Android 9'dan beri resimler varsayılan olarak yumuşatılır: pikseller bulanıklaşmasın.
+        keskin.setFilterBitmap(false);
         cizgi.setStyle(Paint.Style.STROKE);
         cizgi.setStrokeCap(Paint.Cap.ROUND);
         cizgi.setStrokeJoin(Paint.Join.ROUND);

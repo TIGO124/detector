@@ -67,7 +67,7 @@ final class Fotograf {
         Canvas c = new Canvas(foto);
         c.drawBitmap(goruntu, 0, 0, null);
         c.scale(foto.getWidth() / (float) cizim.getWidth(), foto.getHeight() / (float) cizim.getHeight());
-        cizim.draw(c);
+        cizim.cekimIcinCiz(c);
         flas.setAlpha(0.8f);
         flas.animate().alpha(0f).setDuration(300).start();
         if (!depoIzniVar()) {

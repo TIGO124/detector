@@ -345,7 +345,7 @@ final class OgretPaneli {
         arkada(() -> {
             try (InputStream g = etkinlik.getContentResolver().openInputStream(uri)) {
                 if (g == null) throw new IllegalArgumentException("Dosya açılamadı.");
-                yz.modeliYukle(t, YzTanima.metin(g));
+                yz.modeliYukle(t, YzDosyalari.metin(g));
             }
             return "Model yüklendi.";
         });

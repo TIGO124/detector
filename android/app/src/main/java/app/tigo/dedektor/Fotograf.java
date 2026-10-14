@@ -4,6 +4,7 @@ import android.Manifest;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.net.Uri;
 import android.os.Build;
 import android.util.Log;
 import android.view.View;
@@ -13,29 +14,47 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.camera.view.PreviewView;
 import androidx.core.content.ContextCompat;
+import java.util.function.BiConsumer;
 
-/** Fotoğraf: önizleme ile çizimleri birleştirip galeriye kaydeder; Android 9 ve öncesinde izin ister. */
+/**
+ * Fotoğraf: önizleme ile çizimleri birleştirip galeriye kaydeder; Android 9 ve öncesinde izin
+ * ister. Kaydedilince adresi ve küçük resmi bildirir (son çekim düğmesi için).
+ */
 final class Fotograf {
 
     private final AppCompatActivity etkinlik;
     private final PreviewView onizleme;
     private final CizimView cizim;
     private final View flas;
+    /** Kaydedildi: galerideki adresi ve küçük resim (arayüz iş parçacığında). */
+    private final BiConsumer<Uri, Bitmap> kaydedildi;
     private final ActivityResultLauncher<String> depoIzni;
     private Bitmap kaydedilecek;
 
     /** Etkinliğin onCreate'inde kurulmalı (izin isteği o sırada kaydedilir). */
-    Fotograf(AppCompatActivity etkinlik, PreviewView onizleme, CizimView cizim, View flas) {
+    Fotograf(AppCompatActivity etkinlik, PreviewView onizleme, CizimView cizim, View flas, BiConsumer<Uri, Bitmap> kaydedildi) {
         this.etkinlik = etkinlik;
         this.onizleme = onizleme;
         this.cizim = cizim;
         this.flas = flas;
+        this.kaydedildi = kaydedildi;
         depoIzni = etkinlik.registerForActivityResult(new ActivityResultContracts.RequestPermission(), verildi -> {
             Bitmap foto = kaydedilecek;
             kaydedilecek = null;
-            if (verildi && foto != null) arkadaKaydet(foto);
-            else toast("Fotoğraf kaydetme izni verilmedi.");
+            if (!verildi) toast("Galeriye kaydetme izni verilmedi.");
+            else if (foto != null) arkadaKaydet(foto);
+            else toast("İzin verildi, yeniden dene.");
         });
+    }
+
+    /** Android 10'dan önce galeriye yazmak için izin gerekir. */
+    boolean depoIzniVar() {
+        return Build.VERSION.SDK_INT >= 29
+            || ContextCompat.checkSelfPermission(etkinlik, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    void depoIzniIste() {
+        depoIzni.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE);
     }
 
     void cek() {
@@ -51,10 +70,9 @@ final class Fotograf {
         cizim.draw(c);
         flas.setAlpha(0.8f);
         flas.animate().alpha(0f).setDuration(300).start();
-        if (Build.VERSION.SDK_INT < 29
-            && ContextCompat.checkSelfPermission(etkinlik, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+        if (!depoIzniVar()) {
             kaydedilecek = foto;
-            depoIzni.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+            depoIzniIste();
             return;
         }
         arkadaKaydet(foto);
@@ -63,13 +81,24 @@ final class Fotograf {
     private void arkadaKaydet(Bitmap foto) {
         new Thread(() -> {
             try {
-                Galeri.kaydet(etkinlik, foto);
-                etkinlik.runOnUiThread(() -> toast("Fotoğraf galeriye kaydedildi."));
+                Uri uri = Galeri.kaydet(etkinlik, foto);
+                Bitmap kucuk = kucukResim(foto);
+                etkinlik.runOnUiThread(() -> {
+                    toast("Fotoğraf galeriye kaydedildi.");
+                    kaydedildi.accept(uri, kucuk);
+                });
             } catch (Exception e) {
                 Log.e("Dedektor", "Fotoğraf kaydedilemedi", e);
                 etkinlik.runOnUiThread(() -> toast("Fotoğraf kaydedilemedi."));
             }
         }).start();
+    }
+
+    /** Son çekim düğmesi için küçük kopya (kısa kenar 160 piksel). */
+    static Bitmap kucukResim(Bitmap b) {
+        float o = 160f / Math.min(b.getWidth(), b.getHeight());
+        if (o >= 1f) return b;
+        return Bitmap.createScaledBitmap(b, Math.round(b.getWidth() * o), Math.round(b.getHeight() * o), true);
     }
 
     private void toast(String mesaj) {

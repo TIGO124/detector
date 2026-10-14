@@ -226,7 +226,7 @@ final class KisiTanima {
     /** APK içindeki metin dosyası. */
     static String oku(Context baglam, String yol) throws IOException {
         try (InputStream g = baglam.getAssets().open(yol)) {
-            return YzTanima.metin(g);
+            return YzDosyalari.metin(g);
         }
     }
 }

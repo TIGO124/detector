@@ -70,6 +70,8 @@ final class Algilayici {
      */
     private static final long GPU_SABIR_MS = 8000;
     private static final int HAVUZ_BOYUTU = 4;
+    /** Pil tasarrufunda kareler arası en az bu kadar (saniyede en çok 8 kare). */
+    private static final long TASARRUF_MS = 125;
 
     /** Birden çok modele verilen kamera karesi; hepsi bitirince bitmap havuza döner. */
     private final class Kare {
@@ -186,6 +188,9 @@ final class Algilayici {
     private final ArrayDeque<Bitmap> havuz = new ArrayDeque<>();
     private volatile Delegate hizlandirici = Delegate.CPU;
     private final AtomicBoolean gpuBildirildi = new AtomicBoolean();
+    /** Pil tasarrufu: modellere daha seyrek kare verilir. */
+    volatile boolean tasarruf;
+    private long sonKare;
 
     Algilayici(Context baglam, Dinleyici dinleyici) {
         this.baglam = baglam;
@@ -318,9 +323,11 @@ final class Algilayici {
     void kareVer(ImageProxy goruntu) {
         try {
             long zaman = SystemClock.uptimeMillis();
+            if (tasarruf && zaman - sonKare < TASARRUF_MS) return;
             List<Gorev> alacaklar = new ArrayList<>(5);
             for (Gorev g : new Gorev[] {yuz, el, vucut, arkaPlan, nesne}) if (g.ayir(zaman)) alacaklar.add(g);
             if (alacaklar.isEmpty()) return;
+            sonKare = zaman;
             // Görüntü dik (setOutputImageRotationEnabled) ve aynalanmamış; el etiketleri doğru çıkar.
             Kare kare = kareyiKopyala(goruntu);
             kare.kullanan.set(alacaklar.size());

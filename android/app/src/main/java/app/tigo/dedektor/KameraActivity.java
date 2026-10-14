@@ -5,31 +5,22 @@ import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.os.SystemClock;
-import android.util.Log;
-import android.util.Size;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.camera.core.CameraSelector;
-import androidx.camera.core.ImageAnalysis;
-import androidx.camera.core.Preview;
-import androidx.camera.core.resolutionselector.AspectRatioStrategy;
-import androidx.camera.core.resolutionselector.ResolutionSelector;
-import androidx.camera.core.resolutionselector.ResolutionStrategy;
-import androidx.camera.lifecycle.ProcessCameraProvider;
-import androidx.camera.view.PreviewView;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
-import com.google.common.util.concurrent.ListenableFuture;
 import com.google.mediapipe.framework.image.BitmapExtractor;
 import com.google.mediapipe.framework.image.MPImage;
 import com.google.mediapipe.tasks.components.containers.Category;
@@ -39,6 +30,7 @@ import com.google.mediapipe.tasks.vision.gesturerecognizer.GestureRecognizerResu
 import com.google.mediapipe.tasks.vision.imagesegmenter.ImageSegmenterResult;
 import com.google.mediapipe.tasks.vision.objectdetector.ObjectDetectorResult;
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -46,48 +38,51 @@ import java.util.concurrent.Executors;
 
 /**
  * Kamera ve algılama ekranı. Modlar: Normal (algılama), Çizim (havada çizim), Efekt (yüz
- * efektleri), Oyun (taş-kağıt-makas), YZ (öğretilen hareketler, TİD, duygu, kişi, egzersiz, nesne).
- * Modeller Algilayici'da native çalışır; bu sınıf kamerayı, düğmeleri ve fotoğraf çekmeyi yönetir.
+ * efektleri), Oyun (dört oyun), YZ (öğretilen hareketler, TİD, duygu, kişi, egzersiz, nesne).
+ * Modeller Algilayici'da native çalışır; kamera KameraKontrol'de, çekim CekimKontrol'de,
+ * paneller kendi sınıflarında. Bu sınıf onları bağlar ve model sonuçlarını dağıtır.
  */
-public class KameraActivity extends AppCompatActivity implements Algilayici.Dinleyici {
+public class KameraActivity extends AppCompatActivity implements Algilayici.Dinleyici, AyarPaneli.Dinleyici {
 
-    private static final String ETIKET = "Dedektor";
     private static final String[] MOD_ADLARI = {"Normal", "Çizim", "Efekt", "Oyun", "YZ"};
-    private static final String[] EFEKT_ADLARI = {"Gözlük", "Bıyık", "Şapka", "Hepsi"};
 
-    private PreviewView onizleme;
     private CizimView cizim;
     private TextView yuzSayisi;
     private TextView elSayisi;
     private TextView fpsYazisi;
-    private TextView hizlandiriciYazisi;
     private TextView ipucu;
+    private TextView uykuUyarisi;
     private LinearLayout modlar;
-    private LinearLayout modPaneli;
-    private AyarPaneli ayarPaneli;
-    private YzPaneli yzPaneli;
-    private Fotograf fotograf;
 
     private Ayarlar ayarlar;
     private Algilayici algilayici;
-    private OyunAkisi oyun;
     private YzTanima yz;
+    private Geribildirim geribildirim;
+    private SonucKarti kart;
+    private Kutlama kutlama;
+    private AyarPaneli ayarPaneli;
+    private YzPaneli yzPaneli;
+    private OyunPaneli oyunPaneli;
+    private ModPaneli modPaneli;
+    private KameraKontrol kamera;
+    private CekimKontrol cekim;
+    private YzYedek yedek;
     private final ArkaPlan arkaPlanIsleyici = new ArkaPlan();
     private final HavadaCizim havadaCizim = new HavadaCizim();
     private final ElTakibi elTakibi = new ElTakibi();
     private final IfadeAnalizi ifadeAnalizi = new IfadeAnalizi();
+    private final YuzOlaylari yuzOlaylari = new YuzOlaylari();
     private final ExecutorService analiz = Executors.newSingleThreadExecutor();
-    private ProcessCameraProvider saglayici;
-    private boolean onKamera = true;
     private volatile int sonYuzSayisi;
     private volatile int sonElSayisi;
     private volatile long sonDurumYazimi;
     private volatile List<ElTakibi.ElDurumu> sonEller = Collections.emptyList();
+    private volatile boolean uykuGosteriliyor;
 
     private final ActivityResultLauncher<String> kameraIzni = registerForActivityResult(
         new ActivityResultContracts.RequestPermission(),
         verildi -> {
-            if (verildi) kamerayiBaslat();
+            if (verildi) kamera.baslat();
             else {
                 // "Bir daha sorma" seçildiyse istek hiç sorulmadan reddedilir: nereden açılacağını söyle.
                 boolean kalici = !ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.CAMERA);
@@ -103,29 +98,34 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
         super.onCreate(savedInstanceState);
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView()).setAppearanceLightStatusBars(false);
+        // Egzersiz ve oyunlarda ekrana dokunulmaz: ekran kararmasın.
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         setContentView(R.layout.activity_kamera);
 
-        onizleme = findViewById(R.id.onizleme);
         cizim = findViewById(R.id.cizim);
         yuzSayisi = findViewById(R.id.yuz_sayisi);
         elSayisi = findViewById(R.id.el_sayisi);
         fpsYazisi = findViewById(R.id.fps);
-        hizlandiriciYazisi = findViewById(R.id.hizlandirici);
         ipucu = findViewById(R.id.ipucu);
+        uykuUyarisi = findViewById(R.id.uyku_uyarisi);
         modlar = findViewById(R.id.modlar);
-        modPaneli = findViewById(R.id.mod_paneli);
-        fotograf = new Fotograf(this, onizleme, cizim, findViewById(R.id.flas));
 
         ayarlar = new Ayarlar(getSharedPreferences("kamera", MODE_PRIVATE));
+        geribildirim = new Geribildirim(this, ayarlar, this::bildir);
         cizim.baglan(ayarlar, havadaCizim);
-        oyun = new OyunAkisi(findViewById(R.id.oyun_yazisi), this::oyuncuSecimi);
         algilayici = new Algilayici(this, this);
-        yz = new YzTanima(this);
-        yzPaneli = new YzPaneli(this, ayarlar, yz, findViewById(R.id.geri_sayim), this::modlariGoster);
-        ayarPaneli = new AyarPaneli(this, ayarlar, cizim, () -> {
-            modlariGoster();
-            durumuYaz();
-        }, this::modelleriAyarla, acik -> analiz.execute(() -> algilayici.arkaPlanAyarla(acik)), this::hizlandiriciSec);
+        algilayici.tasarruf = ayarlar.pilTasarrufu;
+        yz = new YzTanima(this, EgzersizGecmisi.tercihlerle(getSharedPreferences("egzersiz", MODE_PRIVATE)));
+        yz.olaylar = geribildirim::soyle;
+        kart = new SonucKarti(this);
+        kutlama = new Kutlama(cizim, findViewById(R.id.oyun_yazisi));
+        yzPaneli = new YzPaneli(this, ayarlar, yz, kart, findViewById(R.id.geri_sayim), geribildirim, kutlama, this::modlariGoster);
+        oyunPaneli = new OyunPaneli(this, ayarlar, kart, cizim, geribildirim, kutlama, this::modlariGoster);
+        modPaneli = new ModPaneli(this, ayarlar, cizim, havadaCizim, yzPaneli, oyunPaneli);
+        ayarPaneli = new AyarPaneli(this, ayarlar, this);
+        cekim = new CekimKontrol(this, ayarlar, cizim, geribildirim);
+        kamera = new KameraKontrol(this, ayarlar, cizim, analiz, algilayici::kareVer, havadaCizim::temizle);
+        yedek = new YzYedek(this, yz.dosyalar.klasor, this::recreate);
 
         kenarBosluklariniAyarla();
         dugmeleriBagla();
@@ -136,9 +136,10 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
             ayarlar.gpu = algilayici.temelModelleriKur(ayarlar.gpu);
             if (ayarlar.vucutGerekli()) algilayici.vucutAyarla(true);
             if (ayarlar.arkaPlan != Ayarlar.ArkaPlan.KAPALI) algilayici.arkaPlanAyarla(true);
+            yz.egzersiz.gecmis.temizle(EgzersizGecmisi.bugun());
             runOnUiThread(this::durumuYaz);
         });
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) kamerayiBaslat();
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) kamera.baslat();
         else kameraIzni.launch(Manifest.permission.CAMERA);
 
         // Geri: önce açık paneli kapatır.
@@ -152,11 +153,21 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
     }
 
     @Override
+    protected void onPause() {
+        // Video kaydedilir, geri sayım ve uyku alarmı durur.
+        cekim.durdur();
+        uykuyuGoster(false);
+        super.onPause();
+    }
+
+    @Override
     protected void onDestroy() {
         // Önce kamerayı ayır: kapanan iş parçacığına yeni kare gelip reddedilmesin.
-        if (saglayici != null) saglayici.unbindAll();
-        oyun.durdur();
+        kamera.ayir();
+        oyunPaneli.kapat();
         yzPaneli.kapat();
+        kutlama.bitir();
+        geribildirim.kapat();
         analiz.execute(() -> {
             algilayici.hepsiniKapat();
             yz.kapat();
@@ -187,18 +198,14 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
     private void dugmeleriBagla() {
         findViewById(R.id.geri).setOnClickListener(v -> finish());
         findViewById(R.id.cevir).setOnClickListener(v -> {
-            onKamera = !onKamera;
-            havadaCizim.temizle();
-            kamerayiBagla();
+            cekim.durdur();
+            kamera.cevir();
         });
         findViewById(R.id.ayarlar).setOnClickListener(v -> {
             boolean ac = !ayarPaneli.acik();
             if (ac) yzPaneli.geri();
             ayarPaneli.ac(ac);
         });
-        findViewById(R.id.deklansor).setOnClickListener(v -> fotograf.cek());
-        // FPS hapına dokunmak CPU ile GPU arasında geçiş yapar (ayarlarda da var).
-        findViewById(R.id.fps_kutusu).setOnClickListener(v -> hizlandiriciSec(!ayarlar.gpu));
     }
 
     /** Modelleri CPU ya da GPU ile yeniden kurar; GPU olmazsa CPU'ya düşer. */
@@ -222,15 +229,18 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
             Ayarlar.Mod m = tum[i];
             modlar.addView(Cip.sekme(this, MOD_ADLARI[i], ayarlar.mod == m, ayarlar.renk, v -> modSec(m)));
         }
-        modPaneliniGoster();
+        modPaneli.goster();
         String metin = null;
         if (ayarlar.mod == Ayarlar.Mod.CIZIM) metin = "İşaret parmağınla çiz · Yumruğu tut: sil";
-        else if (ayarlar.mod == Ayarlar.Mod.OYUN) metin = "Oyna'ya bas, \"Göster!\" deyince elini göster";
+        else if (ayarlar.mod == Ayarlar.Mod.OYUN) metin = oyunPaneli.ipucu();
         else if (ayarlar.mod == Ayarlar.Mod.YZ) metin = yzPaneli.ipucu();
         ipucu.setText(metin);
         Cip.simge(ipucu, R.drawable.ic_bilgi, ayarlar.renk, 16);
         ipucu.setVisibility(metin == null ? View.GONE : View.VISIBLE);
         yzPaneli.goster(ayarlar.mod == Ayarlar.Mod.YZ);
+        oyunPaneli.goster(ayarlar.mod == Ayarlar.Mod.OYUN);
+        kart.goster(ayarlar.mod == Ayarlar.Mod.YZ || ayarlar.mod == Ayarlar.Mod.OYUN);
+        if (ayarlar.mod != Ayarlar.Mod.EFEKT || ayarlar.efekt != Ayarlar.Efekt.PIKSEL) cizim.pikselGuncelle(null, null);
         modelleriAyarla();
         cizim.invalidate();
     }
@@ -248,50 +258,9 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
     }
 
     private void modSec(Ayarlar.Mod mod) {
-        if (mod != Ayarlar.Mod.OYUN) oyun.durdur();
         ayarlar.mod = mod;
         ayarlar.kaydet();
         modlariGoster();
-    }
-
-    private void modPaneliniGoster() {
-        modPaneli.removeAllViews();
-        switch (ayarlar.mod) {
-            case CIZIM:
-                modPaneli.addView(Cip.olustur(this, "Temizle", R.drawable.ic_silgi, false, ayarlar.renk, v -> {
-                    havadaCizim.temizle();
-                    cizim.invalidate();
-                }));
-                break;
-            case EFEKT:
-                Ayarlar.Efekt[] efektler = Ayarlar.Efekt.values();
-                for (int i = 0; i < efektler.length; i++) {
-                    Ayarlar.Efekt e = efektler[i];
-                    modPaneli.addView(cip(EFEKT_ADLARI[i], ayarlar.efekt == e, v -> {
-                        ayarlar.efekt = e;
-                        ayarlar.kaydet();
-                        modPaneliniGoster();
-                        cizim.invalidate();
-                    }));
-                }
-                break;
-            case OYUN:
-                TextView skor = cip("", false, null);
-                oyun.skorBagla(skor);
-                modPaneli.addView(skor);
-                modPaneli.addView(Cip.olustur(this, "Oyna", R.drawable.ic_oyna, true, ayarlar.renk, v -> oyun.oyna()));
-                break;
-            case YZ:
-                yzPaneli.altModlar(modPaneli);
-                break;
-            default:
-                break;
-        }
-        ((View) modPaneli.getParent()).setVisibility(modPaneli.getChildCount() == 0 ? View.GONE : View.VISIBLE);
-    }
-
-    private TextView cip(String metin, boolean secili, View.OnClickListener tik) {
-        return Cip.olustur(this, metin, secili, ayarlar.renk, tik);
     }
 
     // ---------- Model sonuçları (MediaPipe iş parçacıklarından) ----------
@@ -299,6 +268,7 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
     @Override
     public void yuz(FaceLandmarkerResult sonuc, MPImage girdi) {
         List<List<Category>> puanlar = sonuc.faceBlendshapes().orElse(Collections.emptyList());
+        long simdi = SystemClock.uptimeMillis();
         List<String> ifadeler = Collections.emptyList();
         if (ayarlar.mod == Ayarlar.Mod.YZ) {
             ifadeler = yzYuz(sonuc, puanlar, girdi);
@@ -307,10 +277,18 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
         } else {
             ifadeler = ifadeAnalizi.guncelle(puanlar.get(0));
         }
+        ifadeler = yuzOlaylari(sonuc, puanlar, ifadeler, simdi);
+        if (ayarlar.mod == Ayarlar.Mod.EFEKT && ayarlar.efekt == Ayarlar.Efekt.PIKSEL) {
+            float[] kutu = new float[4];
+            Bitmap kucuk = sonuc.faceLandmarks().isEmpty() ? null
+                : YuzEfektleri.pikselKaresi(BitmapExtractor.extract(girdi), sonuc.faceLandmarks().get(0), kutu);
+            cizim.pikselGuncelle(kucuk, kutu);
+        }
         cizim.yuzGuncelle(sonuc, ifadeler, girdi.getWidth(), girdi.getHeight());
+        KlipKaydedici klip = cekim.klip();
+        if (klip.kayitta()) klip.kare(BitmapExtractor.extract(girdi));
         sonYuzSayisi = sonuc.faceLandmarks().size();
         // Sayaçlar saniyede 4 kez yeterli; her karede yazmak üst çubuğu her karede yeniden ölçtürür.
-        long simdi = SystemClock.uptimeMillis();
         if (simdi - sonDurumYazimi >= 250) {
             sonDurumYazimi = simdi;
             runOnUiThread(this::durumuYaz);
@@ -325,20 +303,54 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
         return yazi == null ? Collections.emptyList() : Collections.singletonList(yazi);
     }
 
+    /** Uyku uyarısı, gülümseyince çekim ve (Normal modda) baş hareketi etiketi. */
+    private List<String> yuzOlaylari(FaceLandmarkerResult sonuc, List<List<Category>> puanlar, List<String> ifadeler, long simdi) {
+        if (sonuc.faceLandmarks().isEmpty() || puanlar.isEmpty()) {
+            yuzOlaylari.yuzYok();
+            uykuyuGoster(false);
+            cekim.yuz(0f, simdi);
+            return ifadeler;
+        }
+        List<Category> p = puanlar.get(0);
+        List<NormalizedLandmark> n = sonuc.faceLandmarks().get(0);
+        YuzOlaylari.Bas bas = yuzOlaylari.guncelle(YuzOlaylari.gozKapali(p), YuzOlaylari.yaw(n), YuzOlaylari.pitch(n), simdi);
+        uykuyuGoster(ayarlar.uykuUyarisi && yuzOlaylari.uyku());
+        cekim.yuz(YuzOlaylari.gulumseme(p), simdi);
+        if (ayarlar.mod != Ayarlar.Mod.NORMAL) return ifadeler;
+        if (bas != null) geribildirim.soyle(bas == YuzOlaylari.Bas.EVET ? "Evet" : "Hayır");
+        String etiket = yuzOlaylari.basEtiketi(simdi);
+        if (etiket == null) return ifadeler;
+        List<String> yeni = new ArrayList<>(ifadeler.size() + 1);
+        yeni.add(etiket);
+        yeni.addAll(ifadeler);
+        return yeni;
+    }
+
+    private void uykuyuGoster(boolean uyku) {
+        if (uyku == uykuGosteriliyor) return;
+        uykuGosteriliyor = uyku;
+        geribildirim.alarm(uyku);
+        if (uyku) geribildirim.titret(800);
+        runOnUiThread(() -> uykuUyarisi.setVisibility(uyku ? View.VISIBLE : View.GONE));
+    }
+
     @Override
     public void el(GestureRecognizerResult sonuc, int genislik, int yukseklik) {
         List<ElTakibi.ElDurumu> eller = elTakibi.guncelle(ElTakibi.olcumler(sonuc));
-        if (ayarlar.mod == Ayarlar.Mod.YZ) yz.el(eller, ayarlar.yz, SystemClock.uptimeMillis());
+        long simdi = SystemClock.uptimeMillis();
+        if (ayarlar.mod == Ayarlar.Mod.YZ) yz.el(eller, ayarlar.yz, simdi);
         cizim.elGuncelle(eller, genislik, yukseklik);
         sonEller = eller;
         sonElSayisi = eller.size();
         if (ayarlar.mod == Ayarlar.Mod.CIZIM) cizimiGuncelle(eller);
+        oyunPaneli.el(eller);
+        cekim.el(eller, simdi);
     }
 
     @Override
     public void vucut(PoseLandmarkerResult sonuc, int genislik, int yukseklik) {
         if (ayarlar.vucutGerekli()) cizim.vucutGuncelle(sonuc, genislik, yukseklik);
-        if (ayarlar.mod == Ayarlar.Mod.YZ && ayarlar.yz == Ayarlar.Yz.EGZERSIZ) yz.vucut(sonuc);
+        if (ayarlar.mod == Ayarlar.Mod.YZ && ayarlar.yz == Ayarlar.Yz.EGZERSIZ) yz.egzersiz.vucut(sonuc, SystemClock.uptimeMillis());
     }
 
     @Override
@@ -379,60 +391,63 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
         havadaCizim.guncelle(uc.x(), uc.y(), el.isaret && !el.yumruk(), el.yumruk(), SystemClock.uptimeMillis());
     }
 
-    /** Oyun için: görünen ellerden ilk geçerli seçim. */
-    private TasKagitMakas.Secim oyuncuSecimi() {
-        for (ElTakibi.ElDurumu el : sonEller) {
-            TasKagitMakas.Secim secim = TasKagitMakas.hareketten(el.hareketKodu, el.parmak);
-            if (secim != null) return secim;
-        }
-        return null;
+    // ---------- Ayarlar yaprağı ----------
+
+    @Override
+    public void renkDegisti() {
+        modlariGoster();
+        durumuYaz();
     }
 
-    // ---------- Kamera ----------
-
-    private void kamerayiBaslat() {
-        ListenableFuture<ProcessCameraProvider> gelecek = ProcessCameraProvider.getInstance(this);
-        gelecek.addListener(() -> {
-            try {
-                saglayici = gelecek.get();
-                kamerayiBagla();
-            } catch (Exception e) {
-                Log.e(ETIKET, "Kamera açılamadı", e);
-                toast("Kamera açılamadı.");
-            }
-        }, ContextCompat.getMainExecutor(this));
+    @Override
+    public void vucutDegisti() {
+        modelleriAyarla();
     }
 
-    private void kamerayiBagla() {
-        if (saglayici == null) return;
-        // Önizleme ve analiz aynı en-boy oranında (4:3): çizim önizlemeyle birebir örtüşür.
-        AspectRatioStrategy oran = AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY;
-        Preview onizlemeKullanimi = new Preview.Builder()
-            .setResolutionSelector(new ResolutionSelector.Builder().setAspectRatioStrategy(oran).build())
-            .build();
-        onizlemeKullanimi.setSurfaceProvider(onizleme.getSurfaceProvider());
+    @Override
+    public void arkaPlanDegisti(boolean acik) {
+        if (!acik) cizim.arkaPlaniTemizle();
+        analiz.execute(() -> algilayici.arkaPlanAyarla(acik));
+    }
 
-        // Modeller 256 pikselden küçük girdi kullanır; 640x480 yeterli ve hızlı.
-        ImageAnalysis analizKullanimi = new ImageAnalysis.Builder()
-            .setResolutionSelector(new ResolutionSelector.Builder()
-                .setAspectRatioStrategy(oran)
-                .setResolutionStrategy(new ResolutionStrategy(new Size(640, 480), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER))
-                .build())
-            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
-            .setOutputImageRotationEnabled(true)
-            .build();
-        analizKullanimi.setAnalyzer(analiz, algilayici::kareVer);
+    @Override
+    public void hizlandiriciSecildi(boolean gpu) {
+        hizlandiriciSec(gpu);
+    }
 
-        CameraSelector secim = onKamera ? CameraSelector.DEFAULT_FRONT_CAMERA : CameraSelector.DEFAULT_BACK_CAMERA;
-        try {
-            saglayici.unbindAll();
-            saglayici.bindToLifecycle(this, secim, onizlemeKullanimi, analizKullanimi);
-            cizim.setAynali(onKamera);
-        } catch (Exception e) {
-            Log.e(ETIKET, "Kamera bağlanamadı", e);
-            toast(onKamera ? "Ön kamera açılamadı." : "Arka kamera açılamadı.");
-        }
+    @Override
+    public void ayarDegisti() {
+        algilayici.tasarruf = ayarlar.pilTasarrufu;
+        if (!ayarlar.uykuUyarisi) uykuyuGoster(false);
+        cizim.invalidate();
+    }
+
+    @Override
+    public void yedekle() {
+        yedek.paylas();
+    }
+
+    @Override
+    public void geriYukle() {
+        yedek.sec();
+    }
+
+    @Override
+    public void hakkinda() {
+        Hakkinda.goster(this);
+    }
+
+    @Override
+    public void sifirla() {
+        new AlertDialog.Builder(this)
+            .setTitle("Ayarlar sıfırlansın mı?")
+            .setMessage("Bütün ayarlar ilk hâline döner. Öğrettiğin yapay zekâ verileri ve egzersiz geçmişi silinmez.")
+            .setNegativeButton("Vazgeç", null)
+            .setPositiveButton("Sıfırla", (d, w) -> {
+                ayarlar.sifirla();
+                recreate();
+            })
+            .show();
     }
 
     // ---------- Durum ----------
@@ -443,9 +458,9 @@ public class KameraActivity extends AppCompatActivity implements Algilayici.Dinl
         elSayisi.setText(String.valueOf(sonElSayisi));
         elSayisi.setTextColor(ayarlar.renk);
         int fps = Math.round(Math.min(algilayici.yuz.fps.deger(), algilayici.el.fps.deger()));
-        fpsYazisi.setText(fps + " FPS");
-        hizlandiriciYazisi.setText(ayarlar.gpu ? "GPU" : "CPU");
+        fpsYazisi.setText(fps + " FPS" + (ayarlar.gpu ? " · GPU" : ""));
         yzPaneli.guncelle();
+        oyunPaneli.guncelle();
     }
 
     private void toast(String mesaj) {

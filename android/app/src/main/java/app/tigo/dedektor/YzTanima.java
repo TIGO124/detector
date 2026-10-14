@@ -3,20 +3,11 @@ package app.tigo.dedektor;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.os.SystemClock;
-import android.util.Log;
 import com.google.mediapipe.tasks.components.containers.Category;
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark;
 import com.google.mediapipe.tasks.vision.objectdetector.ObjectDetectorResult;
-import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.List;
@@ -29,8 +20,14 @@ import org.json.JSONException;
  * Hareket ve TİD modelleri "Öğret" ile kaydedilen örneklerden telefonda (ya da bilgisayarda)
  * eğitilir; duygu ve egzersiz modelleri bilgisayarda eğitilip APK'ya konmuştur. Sonuçlar
  * MediaPipe iş parçacıklarından gelir; ekranda gösterilecek olanlar burada tutulur.
+ * Dosyalar YzDosyalari'nda, egzersiz sayımı EgzersizTakibi'nde.
  */
 final class YzTanima {
+
+    /** Sesli okunacak olaylar: tanınan kişi, eklenen harf, yeni hareket ya da nesne. */
+    interface Olaylar {
+        void soyle(String metin);
+    }
 
     /** Bir tanımanın gösterilmesi için gereken olasılık. */
     static final float ESIK = 0.7f;
@@ -39,20 +36,17 @@ final class YzTanima {
     private static final long KISI_ARALIGI_MS = 400;
     private static final long NESNE_ARALIGI_MS = 300;
     private static final long KAYIT_ARALIGI_MS = 250;
-    private static final String ETIKET = "Dedektor";
 
+    final YzDosyalari dosyalar;
     final YzVeri hareketVerisi;
     final YzVeri tidVerisi;
     final YzVeri kisiVerisi;
     final YzVeri nesneVerisi;
-    final EgzersizSayaci sayac = new EgzersizSayaci();
-    /** Egzersizde bir tekrar tamamlanınca çağrılır (vücut modelinin iş parçacığından). */
-    volatile Runnable tekrarOldu;
+    final EgzersizTakibi egzersiz;
+    volatile Olaylar olaylar;
 
     private final Context baglam;
-    private final File klasor;
     private final SinirAgi duyguModeli;
-    private final SinirAgi egzersizModeli;
     private volatile SinirAgi hareketModeli;
     private volatile SinirAgi tidModeli;
     private KisiTanima kisi;
@@ -72,26 +66,34 @@ final class YzTanima {
     private volatile String hareketYazisi;
     private volatile String duyguYazisi;
     private volatile long sonKisi;
-    private volatile boolean vucutGorunuyor;
     private final ArrayDeque<String> nesneGecmisi = new ArrayDeque<>();
     private final ArrayDeque<String> ozelGecmisi = new ArrayDeque<>();
     private volatile String nesneYazisi;
     private volatile String ozelNesne;
     private volatile long sonNesneImzasi;
+    /** En son okunan (aynısı tekrar okunmasın; kaybolunca sıfırlanır). */
+    private String okunanHareket;
+    private String okunanKisi;
+    private String okunanNesne;
 
-    YzTanima(Context baglam) {
+    YzTanima(Context baglam, EgzersizGecmisi gecmis) {
         this.baglam = baglam.getApplicationContext();
-        klasor = new File(baglam.getFilesDir(), "yz");
-        if (!klasor.isDirectory() && !klasor.mkdirs()) Log.w(ETIKET, "YZ klasörü oluşturulamadı");
+        dosyalar = new YzDosyalari(baglam);
+        File klasor = dosyalar.klasor;
         hareketVerisi = new YzVeri(new File(klasor, "hareket.veri"), YzOzellik.EL_BOYUTU);
         tidVerisi = new YzVeri(new File(klasor, "tid.veri"), YzOzellik.PENCERE_BOYUTU);
-        kisiVerisi = new YzVeri(surumluDosya("kisiler", kisiSurumu()), KisiTanima.IMZA_BOYUTU);
-        nesneVerisi = new YzVeri(surumluDosya("nesneler", NesneTanima.IMZA_SURUMU), NesneTanima.IMZA_BOYUTU);
+        kisiVerisi = new YzVeri(dosyalar.surumluDosya("kisiler", dosyalar.kisiSurumu()), KisiTanima.IMZA_BOYUTU);
+        nesneVerisi = new YzVeri(dosyalar.surumluDosya("nesneler", NesneTanima.IMZA_SURUMU), NesneTanima.IMZA_BOYUTU);
         nesne = new NesneTanima(baglam);
-        duyguModeli = hazirModel("yz/duygu.json");
-        egzersizModeli = hazirModel("yz/egzersiz.json");
-        hareketModeli = kayitliModel(Ayarlar.Yz.HAREKET);
-        tidModeli = kayitliModel(Ayarlar.Yz.TID);
+        duyguModeli = dosyalar.hazirModel("yz/duygu.json");
+        egzersiz = new EgzersizTakibi(dosyalar.hazirModel("yz/egzersiz.json"), gecmis);
+        hareketModeli = dosyalar.kayitliModel(Ayarlar.Yz.HAREKET);
+        tidModeli = dosyalar.kayitliModel(Ayarlar.Yz.TID);
+    }
+
+    private void soyle(String metin) {
+        Olaylar o = olaylar;
+        if (o != null && metin != null) o.soyle(metin);
     }
 
     // ---------- El: kendi hareketlerin ve TİD ----------
@@ -119,6 +121,8 @@ final class YzTanima {
         String ilk = null;
         for (ElTakibi.ElDurumu el : eller) if (ilk == null) ilk = el.yzEtiketi;
         hareketYazisi = ilk;
+        if (ilk != null && !ilk.equals(okunanHareket) && !kayit) soyle(ilk);
+        okunanHareket = ilk;
     }
 
     /** Sonuç kartı için: ilk elde tanınan hareket, duygu, kişi (yoksa null). */
@@ -141,7 +145,7 @@ final class YzTanima {
         if (kayitta(Ayarlar.Yz.TID)) ornekEkle(tidVerisi, x);
         SinirAgi m = tidModeli;
         String harf = m == null ? "" : etiket(m, x);
-        tid.sonuc(harf);
+        if (tid.sonuc(harf)) soyle(harf);
         if (!harf.isEmpty()) for (ElTakibi.ElDurumu el : eller) el.yzEtiketi = harf;
     }
 
@@ -164,6 +168,7 @@ final class YzTanima {
             synchronized (this) {
                 duyguOrtalamasi = null;
                 kisiGecmisi.clear();
+                okunanKisi = null;
             }
             kisiEtiketi = null;
             duyguYazisi = null;
@@ -201,12 +206,16 @@ final class YzTanima {
         }
         KisiTanima k = kisiModeli();
         String ad = k == null ? null : k.tani(imza, kisiVerisi.hepsi());
+        String selam = null;
         synchronized (this) {
             kisiGecmisi.addLast(ad == null ? "" : ad);
             while (kisiGecmisi.size() > 3) kisiGecmisi.removeFirst();
             String c = cogunluk(kisiGecmisi);
             kisiEtiketi = c != null ? c : kisiVerisi.toplam() == 0 ? "Kayıtlı kişi yok" : "Tanınmadı";
+            if (c != null && !c.equals(okunanKisi)) selam = "Merhaba " + c;
+            if (c != null) okunanKisi = c;
         }
+        soyle(selam);
     }
 
     /** Model ilk kullanımda açılır (LiteRT yüklemesi kısa sürer ama gereksizse hiç yapılmasın). */
@@ -216,39 +225,6 @@ final class YzTanima {
             kisi = KisiTanima.olustur(baglam);
         }
         return kisi;
-    }
-
-    // ---------- Vücut: egzersiz ----------
-
-    /** Vücut modelinin sonucu: duruşu sınıflandırır ve tekrarları sayar. */
-    void vucut(PoseLandmarkerResult s) {
-        if (egzersizModeli == null || s.worldLandmarks().isEmpty() || s.landmarks().isEmpty()) {
-            sayac.guncelle(null, 0f);
-            vucutGorunuyor = false;
-            return;
-        }
-        // Bacaklar görünmüyorsa duruş güvenilir değil (ör. yalnızca üst beden kadrajda).
-        List<NormalizedLandmark> n = s.landmarks().get(0);
-        vucutGorunuyor = n.size() > 28 && Math.max(gorunurluk(n.get(27)), gorunurluk(n.get(28))) >= 0.5f;
-        if (!vucutGorunuyor) {
-            sayac.guncelle(null, 0f);
-            return;
-        }
-        float[] p = egzersizModeli.calistir(YzOzellik.vucut(YzOzellik.noktalar(s.worldLandmarks().get(0))));
-        int i = SinirAgi.enBuyukIndeks(p);
-        Runnable r = tekrarOldu;
-        if (sayac.guncelle(egzersizModeli.etiketler[i], p[i]) && r != null) r.run();
-    }
-
-    /** Egzersiz ekranındaki küçük yazı: o anki duruş ya da neden sayılamadığı. */
-    String egzersizDurumu() {
-        if (!vucutGorunuyor) return "Bütün vücudun görünmüyor";
-        String d = sayac.durum();
-        return d == null ? "Duruş belirsiz" : d;
-    }
-
-    private static float gorunurluk(NormalizedLandmark l) {
-        return l.visibility().orElse(1f);
     }
 
     // ---------- Elindeki nesne ----------
@@ -268,12 +244,17 @@ final class YzTanima {
             && nesne.imzaCikar(kare, this::nesneImzasi)) {
             sonNesneImzasi = simdi;
         }
+        String okunacak = null;
         synchronized (this) {
             nesneGecmisi.addLast(ana == null ? "" : ana.elde ? "Elinde: " + ana.ad : ana.ad);
             while (nesneGecmisi.size() > GECMIS) nesneGecmisi.removeFirst();
             nesneYazisi = cogunluk(nesneGecmisi);
             if (nesneVerisi.toplam() == 0) ozelNesne = null;
+            String yeni = kayit ? null : nesneYazisi();
+            if (yeni != null && !yeni.equals(okunanNesne)) okunacak = yeni.replace("Elinde: ", "Elinde ");
+            okunanNesne = yeni;
         }
+        soyle(okunacak);
         return liste;
     }
 
@@ -355,7 +336,8 @@ final class YzTanima {
         if (e.etiketler.length < 2) throw new IllegalStateException("En az iki farklı şey öğretmelisin.");
         int[] gizli = tur == Ayarlar.Yz.TID ? new int[] {64} : new int[] {32};
         SinirAgi.Sonuc s = SinirAgi.egit(e.x, e.y(), e.etiketler, gizli, 60, System.nanoTime(), ilerleme);
-        modeliKaydet(tur, s.model);
+        dosyalar.modeliKaydet(tur, s.model);
+        model(tur, s.model);
         return s;
     }
 
@@ -371,11 +353,12 @@ final class YzTanima {
         if (m.girdiBoyutu() != beklenen || !m.siniflandirici) {
             throw new IllegalArgumentException("Bu model bu bölüm için değil (girdi " + m.girdiBoyutu() + ", beklenen " + beklenen + ").");
         }
-        modeliKaydet(tur, m);
+        dosyalar.modeliKaydet(tur, m);
+        model(tur, m);
     }
 
     void modeliSil(Ayarlar.Yz tur) {
-        if (!modelDosyasi(tur).delete()) Log.w(ETIKET, "Model dosyası silinemedi");
+        dosyalar.modeliSil(tur);
         model(tur, null);
     }
 
@@ -390,80 +373,10 @@ final class YzTanima {
         return v.dosya();
     }
 
-    private void modeliKaydet(Ayarlar.Yz tur, SinirAgi m) throws IOException, JSONException {
-        File hedef = modelDosyasi(tur);
-        File gecici = new File(hedef.getPath() + ".tmp");
-        try (Writer w = new OutputStreamWriter(new FileOutputStream(gecici), StandardCharsets.UTF_8)) {
-            w.write(m.json());
-        }
-        if (hedef.exists() && !hedef.delete()) throw new IOException("Eski model silinemedi");
-        if (!gecici.renameTo(hedef)) throw new IOException("Model kaydedilemedi");
-        model(tur, m);
-    }
-
     private synchronized void model(Ayarlar.Yz tur, SinirAgi m) {
         if (tur == Ayarlar.Yz.HAREKET) hareketModeli = m;
         else if (tur == Ayarlar.Yz.TID) tidModeli = m;
         elGecmisi.clear();
-    }
-
-    private File modelDosyasi(Ayarlar.Yz tur) {
-        return new File(klasor, (tur == Ayarlar.Yz.TID ? "tid" : "hareket") + ".json");
-    }
-
-    private SinirAgi kayitliModel(Ayarlar.Yz tur) {
-        File f = modelDosyasi(tur);
-        if (!f.exists()) return null;
-        try {
-            return SinirAgi.json(dosyaOku(f));
-        } catch (IOException | JSONException | RuntimeException e) {
-            Log.e(ETIKET, "Kayıtlı model okunamadı: " + f.getName(), e);
-            return null;
-        }
-    }
-
-    /** java.nio.file Android 8'den önce yok. */
-    static String dosyaOku(File f) throws IOException {
-        try (InputStream g = new FileInputStream(f)) {
-            return metin(g);
-        }
-    }
-
-    /** Akışın tamamı, UTF-8 (InputStream.readAllBytes Android 13'ten önce yok). */
-    static String metin(InputStream g) throws IOException {
-        ByteArrayOutputStream o = new ByteArrayOutputStream();
-        byte[] tampon = new byte[16384];
-        for (int n; (n = g.read(tampon)) > 0; ) o.write(tampon, 0, n);
-        return new String(o.toByteArray(), StandardCharsets.UTF_8);
-    }
-
-    private String kisiSurumu() {
-        try {
-            return Integer.toHexString(KisiTanima.oku(baglam, "yz/kimlik.json").hashCode());
-        } catch (IOException e) {
-            Log.w(ETIKET, "Kişi modeli bilgisi okunamadı", e);
-            return "0";
-        }
-    }
-
-    /**
-     * İmzalar (yüz, nesne) yalnızca onları üreten modelle karşılaştırılabilir: kayıt dosyasının
-     * adı modele bağlıdır. Model güncellenince eski kayıtlar silinir (yeniden eklenir).
-     */
-    private File surumluDosya(String onEk, String surum) {
-        String ad = onEk + "_" + surum + ".veri";
-        File[] eskiler = klasor.listFiles((k, a) -> a.startsWith(onEk) && a.endsWith(".veri") && !a.equals(ad));
-        if (eskiler != null) for (File f : eskiler) if (!f.delete()) Log.w(ETIKET, "Eski kayıt silinemedi: " + f.getName());
-        return new File(klasor, ad);
-    }
-
-    private SinirAgi hazirModel(String yol) {
-        try {
-            return SinirAgi.json(KisiTanima.oku(baglam, yol));
-        } catch (IOException | JSONException e) {
-            Log.e(ETIKET, "Hazır model okunamadı: " + yol, e);
-            return null;
-        }
     }
 
     // ---------- Yardımcılar ----------

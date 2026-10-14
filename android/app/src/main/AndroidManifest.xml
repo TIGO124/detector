@@ -47,6 +47,8 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Tekrar, fotoğraf, harf gibi olaylarda kısa titreşim (ayarlardan kapatılabilir) -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Fotoğrafı galeriye kaydetmek: yalnızca Android 9 ve öncesinde izin gerekir -->
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"

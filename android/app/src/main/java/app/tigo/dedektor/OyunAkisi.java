@@ -24,7 +24,8 @@ final class OyunAkisi {
     private final List<TasKagitMakas.Secim> okumalar = new ArrayList<>();
     private final TextView yazi;
     private final ElOkuyucu okuyucu;
-    private TextView skor;
+    /** Tur bitince (skor değişmiş olabilir); arayüz iş parçacığında. */
+    private Runnable bitti;
     private int oyuncuPuani;
     private int telefonPuani;
     private boolean oynaniyor;
@@ -34,10 +35,20 @@ final class OyunAkisi {
         this.okuyucu = okuyucu;
     }
 
-    /** Skor yazısı mod paneli her kurulduğunda yeniden bağlanır. */
-    void skorBagla(TextView skor) {
-        this.skor = skor;
-        skoruYaz();
+    void dinle(Runnable bitti) {
+        this.bitti = bitti;
+    }
+
+    int oyuncuPuani() {
+        return oyuncuPuani;
+    }
+
+    int telefonPuani() {
+        return telefonPuani;
+    }
+
+    boolean oynaniyor() {
+        return oynaniyor;
     }
 
     void oyna() {
@@ -66,6 +77,7 @@ final class OyunAkisi {
         TasKagitMakas.Secim oyuncu = TasKagitMakas.cogunluk(okumalar);
         if (oyuncu == null) {
             goster("El görülmedi\nTekrar dene");
+            if (bitti != null) bitti.run();
             return;
         }
         TasKagitMakas.Secim telefon = TasKagitMakas.Secim.values()[rastgele.nextInt(3)];
@@ -74,15 +86,11 @@ final class OyunAkisi {
         else if (sonuc < 0) telefonPuani++;
         String karar = sonuc > 0 ? "Kazandın!" : sonuc < 0 ? "Kaybettin" : "Berabere";
         goster("Sen: " + oyuncu.ad + "\nTelefon: " + telefon.ad + "\n" + karar);
-        skoruYaz();
+        if (bitti != null) bitti.run();
     }
 
     private void goster(String metin) {
         yazi.setText(metin);
         yazi.setVisibility(View.VISIBLE);
-    }
-
-    private void skoruYaz() {
-        if (skor != null) skor.setText("Sen " + oyuncuPuani + " · " + telefonPuani + " Telefon");
     }
 }

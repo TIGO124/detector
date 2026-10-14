@@ -80,8 +80,8 @@ final class TidYazici {
         return YzOzellik.pencere(oz, bilek);
     }
 
-    /** Bir pencerenin sonucu: tanınan harf ya da boş. */
-    synchronized void sonuc(String harf) {
+    /** Bir pencerenin sonucu: tanınan harf ya da boş. Harf yazıya eklendiyse true. */
+    synchronized boolean sonuc(String harf) {
         if (harf.equals(aday)) sabit++;
         else {
             aday = harf;
@@ -93,7 +93,9 @@ final class TidYazici {
             metin.append(harf.length() > 1 ? harf + " " : harf);
             if (metin.length() > EN_UZUN) metin.delete(0, metin.length() - EN_UZUN);
             sonEklenen = harf;
+            return true;
         }
+        return false;
     }
 
     synchronized String metin() {

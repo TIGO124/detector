@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Kamera önizlemesinin üstüne çizer: arka plan katmanı, vücut iskeleti, yüz ağı ya da yüz
@@ -29,6 +30,11 @@ import java.util.List;
  * kamerada önizleme aynalı olduğu için çizim de aynalanır.
  */
 public class CizimView extends View {
+
+    /** Oyunların ve kutlamanın çizimi: en üste, arayüz iş parçacığında çizilir. */
+    interface Katman {
+        void ciz(Canvas tuval, CizimView v);
+    }
 
     /** Vurgu renginin üstündeki yazı (Tasarım dili: "vurgu üstü"). */
     private static final int KOYU = 0xFF04140B;
@@ -59,6 +65,7 @@ public class CizimView extends View {
     private final Paint etiketZemini = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint etiketYazisi = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint filtre = new Paint(Paint.FILTER_BITMAP_FLAG);
+    private final Paint izgaraKalemi = new Paint();
     private final RectF kutu = new RectF();
     private final Path yol = new Path();
     private final YuzEfektleri efektler = new YuzEfektleri();
@@ -91,6 +98,10 @@ public class CizimView extends View {
     private volatile int resimGenisligi = 1;
     private volatile int resimYuksekligi = 1;
     private volatile boolean aynali = true;
+    /** Pikselleştirme efekti: yüzün küçük resmi ve normalize kutusu. */
+    private volatile Bitmap piksel;
+    private volatile float[] pikselKutusu;
+    private final List<Katman> katmanlar = new CopyOnWriteArrayList<>();
 
     private float olcek, kaymaX, kaymaY;
     private float[] cizgiler = new float[0];
@@ -102,12 +113,13 @@ public class CizimView extends View {
         agKalemi.setStrokeWidth(Math.max(1f, 0.6f * dp));
         hatKalemi.setStrokeWidth(1.5f * dp);
         elKalemi.setStrokeWidth(3f * dp);
-        cizimKalemi.setStrokeWidth(6f * dp);
         cizimKalemi.setStrokeJoin(Paint.Join.ROUND);
         nesneKalemi.setStrokeJoin(Paint.Join.ROUND);
         cerceveKalemi.setStrokeWidth(2f * dp);
         cerceveKalemi.setColor(0xB3FFFFFF);
         cerceveKalemi.setPathEffect(new DashPathEffect(new float[] {12f * dp, 9f * dp}, 0));
+        izgaraKalemi.setColor(0x59FFFFFF);
+        izgaraKalemi.setStrokeWidth(Math.max(1f, dp));
         etiketYazisi.setColor(KOYU);
         etiketYazisi.setTextSize(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 13f, getResources().getDisplayMetrics()));
         etiketYazisi.setTypeface(Cip.font(context, R.font.manrope_cok_kalin));
@@ -156,7 +168,66 @@ public class CizimView extends View {
         vucut = null;
         arkaPlan = null;
         nesneler = Collections.emptyList();
+        piksel = null;
         postInvalidate();
+    }
+
+    void katmanEkle(Katman k) {
+        if (!katmanlar.contains(k)) katmanlar.add(k);
+        postInvalidate();
+    }
+
+    void katmanCikar(Katman k) {
+        katmanlar.remove(k);
+        postInvalidate();
+    }
+
+    /** Pikselleştirme için yüzün küçük resmi (null: yüz yok). */
+    void pikselGuncelle(Bitmap kucuk, float[] kutu) {
+        pikselKutusu = kutu;
+        piksel = kucuk;
+    }
+
+    boolean aynali() {
+        return aynali;
+    }
+
+    /** Ekranın yüksekliği / genişliği. */
+    float oran() {
+        return getWidth() == 0 ? 1f : getHeight() / (float) getWidth();
+    }
+
+    /**
+     * Görüntüde normalize noktanın (0–1) ekrandaki yeri, ekran boyuna oranla (0–1); ön kamerada
+     * aynalanmış. Ölçeği kendisi hesapladığı için her iş parçacığından çağrılabilir.
+     */
+    void ekranOrani(float nx, float ny, float[] cikis) {
+        int w = getWidth();
+        int h = getHeight();
+        int rg = resimGenisligi;
+        int ry = resimYuksekligi;
+        if (w == 0 || h == 0) {
+            cikis[0] = nx;
+            cikis[1] = ny;
+            return;
+        }
+        float o = Math.max(w / (float) rg, h / (float) ry);
+        float sx = nx * rg * o + (w - rg * o) / 2f;
+        cikis[0] = (aynali ? w - sx : sx) / w;
+        cikis[1] = (ny * ry * o + (h - ry * o) / 2f) / h;
+    }
+
+    /**
+     * Çizimleri kamera karesi boyutunda (g×y) bir tuvale çizer (video): ekranda kırpılan kenarlar
+     * dahil bütün kare görünür. Arayüz iş parçacığından.
+     */
+    void kareyeCiz(Canvas tuval, int g, int y) {
+        if (olcek == 0) return;
+        tuval.save();
+        tuval.scale(g / (resimGenisligi * olcek), y / (resimYuksekligi * olcek));
+        tuval.translate(-kaymaX, -kaymaY);
+        draw(tuval);
+        tuval.restore();
     }
 
     private void boyut(int genislik, int yukseklik) {
@@ -234,6 +305,7 @@ public class CizimView extends View {
 
         Bitmap katman = arkaPlan;
         if (katman != null && ayarlar.arkaPlan != Ayarlar.ArkaPlan.KAPALI) arkaPlaniCiz(tuval, katman);
+        if (ayarlar.izgara) izgaraCiz(tuval);
 
         PoseLandmarkerResult v = vucut;
         if (v != null && ayarlar.vucutGerekli()) {
@@ -248,7 +320,8 @@ public class CizimView extends View {
             for (List<NormalizedLandmark> n : f.faceLandmarks()) {
                 if (mod == Ayarlar.Mod.EFEKT) {
                     yuzNoktalari.liste = n;
-                    efektler.ciz(tuval, yuzNoktalari, ayarlar.efekt, ayarlar.renk);
+                    if (ayarlar.efekt == Ayarlar.Efekt.PIKSEL) pikselCiz(tuval);
+                    else efektler.ciz(tuval, yuzNoktalari, ayarlar.efekt, ayarlar.renk);
                     continue;
                 }
                 if (ayarlar.yuzAgi) cizgileriCiz(tuval, n, AG, agKalemi);
@@ -265,6 +338,28 @@ public class CizimView extends View {
         elleriCiz(tuval, eller, etiket, mod == Ayarlar.Mod.YZ);
 
         if (f != null && etiket && !f.faceLandmarks().isEmpty()) ifadeyiYaz(tuval, f, ifadeler);
+
+        for (Katman k : katmanlar) k.ciz(tuval, this);
+    }
+
+    /** Üçte bir kuralı çizgileri. */
+    private void izgaraCiz(Canvas tuval) {
+        float w = getWidth();
+        float h = getHeight();
+        for (int i = 1; i <= 2; i++) {
+            tuval.drawLine(w * i / 3f, 0, w * i / 3f, h, izgaraKalemi);
+            tuval.drawLine(0, h * i / 3f, w, h * i / 3f, izgaraKalemi);
+        }
+    }
+
+    private void pikselCiz(Canvas tuval) {
+        Bitmap p = piksel;
+        float[] k = pikselKutusu;
+        if (p == null || k == null) return;
+        float a = x(k[0]);
+        float b = x(k[2]);
+        kutu.set(Math.min(a, b), y(k[1]), Math.max(a, b), y(k[3]));
+        efektler.piksel(tuval, yuzNoktalari, p, kutu, aynali);
     }
 
     private void renkleriAyarla(int renk) {
@@ -272,7 +367,6 @@ public class CizimView extends View {
         sonRenk = renk;
         hatKalemi.setColor(renk);
         elKalemi.setColor(renk);
-        cizimKalemi.setColor(renk);
         nesneKalemi.setColor(renk);
         etiketZemini.setColor(renk);
         agKalemi.setColor((renk & 0x00FFFFFF) | 0x59000000);
@@ -292,12 +386,15 @@ public class CizimView extends View {
     }
 
     private void havadaCizimiCiz(Canvas tuval) {
-        for (float[][] cizgi : havadaCizim.cizgiler()) {
-            if (cizgi.length == 0) continue;
+        for (HavadaCizim.Cizgi c : havadaCizim.cizgiler()) {
+            float[][] n = c.noktalar;
+            if (n.length == 0) continue;
             yol.reset();
-            yol.moveTo(x(cizgi[0][0]), y(cizgi[0][1]));
-            if (cizgi.length == 1) yol.lineTo(x(cizgi[0][0]) + 0.1f, y(cizgi[0][1]));
-            for (int i = 1; i < cizgi.length; i++) yol.lineTo(x(cizgi[i][0]), y(cizgi[i][1]));
+            yol.moveTo(x(n[0][0]), y(n[0][1]));
+            if (n.length == 1) yol.lineTo(x(n[0][0]) + 0.1f, y(n[0][1]));
+            for (int i = 1; i < n.length; i++) yol.lineTo(x(n[i][0]), y(n[i][1]));
+            cizimKalemi.setColor(c.renk);
+            cizimKalemi.setStrokeWidth(c.kalinlik * dp);
             tuval.drawPath(yol, cizimKalemi);
         }
     }

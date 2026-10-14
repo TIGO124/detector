@@ -20,6 +20,17 @@
         <item name="android:windowBackground">@android:color/black</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="alertDialogTheme">@style/Pencere</item>
+    </style>
+
+    <!-- Onay, geçmiş, hakkında pencereleri: tasarım dilinin koyu yüzeyi -->
+    <style name="Pencere" parent="ThemeOverlay.AppCompat.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/pencere_zemin</item>
+        <item name="colorAccent">@color/vurgu</item>
+        <item name="android:textColorPrimary">@color/yazi</item>
+        <item name="android:textColorSecondary">@color/yazi_cam</item>
+        <item name="android:fontFamily">@font/manrope_kalin</item>
+        <item name="fontFamily">@font/manrope_kalin</item>
     </style>
 
     <!-- Yeni arayüz (Claude Design: "Dedektör Arayüzü"). Yazı: Manrope, sayılar ve başlıklar: Space Grotesk. -->

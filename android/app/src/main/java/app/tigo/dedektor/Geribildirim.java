@@ -36,6 +36,8 @@ final class Geribildirim implements TextToSpeech.OnInitListener {
     private ToneGenerator ton;
     private ToneGenerator alarmTonu;
     private boolean alarmda;
+    /** Ekran kapandı: geç gelen model sonuçları ses kaynağını yeniden açmasın. */
+    private boolean kapandi;
 
     Geribildirim(Context baglam, Ayarlar ayarlar, Consumer<String> bildir) {
         this.baglam = baglam.getApplicationContext();
@@ -45,7 +47,7 @@ final class Geribildirim implements TextToSpeech.OnInitListener {
 
     /** Metni Türkçe okur (sesli geri bildirim açıksa). Sıraya girmez: yeni söz eskisini keser. */
     synchronized void soyle(String metin) {
-        if (!ayarlar.sesli || metin == null || metin.isEmpty()) return;
+        if (kapandi || !ayarlar.sesli || metin == null || metin.isEmpty()) return;
         long simdi = SystemClock.uptimeMillis();
         if (metin.equals(sonSoz) && simdi - sonSozZamani < TEKRAR_MS) return;
         sonSoz = metin;
@@ -96,6 +98,7 @@ final class Geribildirim implements TextToSpeech.OnInitListener {
 
     /** Kısa ses (ToneGenerator tonu). */
     synchronized void ses(int tur, int ms) {
+        if (kapandi) return;
         try {
             if (ton == null) ton = new ToneGenerator(AudioManager.STREAM_MUSIC, 80);
             ton.startTone(tur, ms);
@@ -106,7 +109,7 @@ final class Geribildirim implements TextToSpeech.OnInitListener {
 
     /** Uyku alarmı: açılınca durdurulana kadar çalar. */
     synchronized void alarm(boolean ac) {
-        if (ac == alarmda) return;
+        if (ac == alarmda || (ac && kapandi)) return;
         alarmda = ac;
         try {
             if (ac) {
@@ -122,6 +125,7 @@ final class Geribildirim implements TextToSpeech.OnInitListener {
 
     synchronized void kapat() {
         alarm(false);
+        kapandi = true;
         if (tts != null) {
             tts.stop();
             tts.shutdown();

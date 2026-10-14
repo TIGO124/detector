@@ -16,9 +16,10 @@ final class NotaCalar {
     private static final double[] FREKANSLAR = {261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88};
 
     private final AudioTrack[] izler = new AudioTrack[FREKANSLAR.length];
+    private boolean kapandi;
 
     synchronized void cal(int nota) {
-        if (nota < 0 || nota >= izler.length) return;
+        if (kapandi || nota < 0 || nota >= izler.length) return;
         try {
             AudioTrack iz = izler[nota];
             if (iz == null) {
@@ -62,6 +63,7 @@ final class NotaCalar {
     }
 
     synchronized void kapat() {
+        kapandi = true;
         for (int i = 0; i < izler.length; i++) {
             if (izler[i] != null) izler[i].release();
             izler[i] = null;

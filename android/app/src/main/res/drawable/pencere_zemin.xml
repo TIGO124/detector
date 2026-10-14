@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Açılır pencereler (onay, geçmiş, hakkında): yaprak rengi, yuvarlak köşe -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:insetLeft="16dp"
+    android:insetTop="16dp"
+    android:insetRight="16dp"
+    android:insetBottom="16dp">
+    <shape android:shape="rectangle">
+        <solid android:color="@color/pencere" />
+        <stroke android:width="1dp" android:color="@color/cizgi_acik" />
+        <corners android:radius="24dp" />
+    </shape>
+</inset>

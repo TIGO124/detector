@@ -17,6 +17,9 @@
     <color name="soluk">#9AA6B8</color>
     <!-- Vurgu renginin üstündeki yazı -->
     <color name="vurgu_ustu">#04140B</color>
+    <!-- Açılır pencereler; düğmeler varsayılan vurgu renginde -->
+    <color name="pencere">#121A2B</color>
+    <color name="vurgu">#00E676</color>
     <color name="kayit">#FF4D5E</color>
     <color name="kayit_acik">#FF8A95</color>
 </resources>

@@ -1,6 +1,6 @@
 {
-  "surum": "1.6.1",
+  "surum": "1.7.0",
   "notlar": [
-    "Hata düzeltmeleri: GPU çökmesi giderildi (çalışmazsa CPU'ya kendiliğinden geçer), simgeden dönünce kamera ekranı kapanmıyor, küçük ekranlarda ayarlar kaydırılabiliyor"
+    "26 yeni özellik: efektli video, zamanlayıcı, gülümseyince ve zafer işaretiyle çekim, uyku uyarısı, kedi/taç/palyaço/piksel efektleri, balon, hesap ve piyano oyunları, egzersiz hedefi ve plank, sesli geri bildirim, yedekleme ve daha fazlası."
   ]
 }
